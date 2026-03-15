@@ -26,6 +26,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [reportData, setReportData] = useState(null)
+  const [reportDates, setReportDates] = useState({
+    start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  })
+  const [isGenerating, setIsGenerating] = useState(false)
   const [myTasks, setMyTasks] = useState([])
   const [readingTrends, setReadingTrends] = useState([])
   const { user } = useAuth()
@@ -119,17 +124,127 @@ export default function Dashboard() {
     }
   }
 
-  const prepareReport = async () => {
-    setIsReportModalOpen(true)
-    // Recopilar datos detallados para el reporte
-    const { data: incs } = await supabase.from('incidencias').select('*').limit(50)
-    const { data: hist } = await supabase.from('historial_mantenimiento').select('*, tarea:tarea_id(titulo)').limit(20)
-    
-    setReportData({
-      date: new Date().toLocaleString(),
-      incidents: incs || [],
-      maintenance: hist || []
-    })
+  const generateProReport = async () => {
+    setIsGenerating(true)
+    try {
+      const { start, end } = reportDates
+      
+      // 1. Incidencias en el periodo
+      const { data: incs } = await supabase
+        .from('incidencias')
+        .select('*')
+        .gte('created_at', start)
+        .lte('created_at', end + 'T23:59:59')
+
+      // 2. Mantenimiento en el periodo
+      const { data: maintenance } = await supabase
+        .from('historial_mantenimiento')
+        .select('*, tarea:tarea_id(titulo)')
+        .gte('completado_el', start)
+        .lte('completado_el', end + 'T23:59:59')
+
+      // 3. Consumos (Agregado básico para el reporte)
+      const { data: readings } = await supabase
+        .from('lecturas')
+        .select('*, contador:contador_id(nombre, tipo)')
+        .gte('fecha', start)
+        .lte('fecha', end)
+        .order('fecha', { ascending: true })
+
+      // Procesar consumos por tipo
+      const consumos = readings?.reduce((acc, curr, idx, arr) => {
+        const next = arr.find((r, i) => i > idx && r.contador_id === curr.contador_id)
+        if (next) {
+          const diff = next.valor - curr.valor
+          acc[curr.contador.tipo] = (acc[curr.contador.tipo] || 0) + diff
+        }
+        return acc
+      }, {})
+
+      const doc = new jsPDF()
+      const { default: autoTable } = await import('jspdf-autotable')
+
+      // Diseño del PDF
+      doc.setFillColor(10, 10, 26)
+      doc.rect(0, 0, 210, 40, 'F')
+      
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(22)
+      doc.text('HOTELOPS PRO', 14, 25)
+      doc.setFontSize(10)
+      doc.text('REPORTE EJECUTIVO DE OPERACIONES', 14, 32)
+      
+      doc.setTextColor(100, 100, 100)
+      doc.text(`Periodo: ${new Date(start).toLocaleDateString()} al ${new Date(end).toLocaleDateString()}`, 14, 48)
+      doc.text(`Generado el: ${new Date().toLocaleString()}`, 14, 54)
+
+      // KPIs
+      doc.setTextColor(0, 0, 0)
+      doc.setFontSize(14)
+      doc.text('Métricas Clave', 14, 70)
+      
+      const kpiData = [
+        ['Incidencias Reportadas', incs?.length || 0],
+        ['Incidencias Resueltas', incs?.filter(i => i.status === 'resolved').length || 0],
+        ['Mantenimientos Ejecutados', maintenance?.length || 0],
+        ['Eficiencia de Resolución', incs?.length ? Math.round((incs.filter(i => i.status === 'resolved').length / incs.length) * 100) + '%' : 'N/A']
+      ]
+
+      autoTable(doc, {
+        startY: 75,
+        head: [['KPI', 'Valor']],
+        body: kpiData,
+        theme: 'striped',
+        headStyles: { fillColor: [99, 102, 241] },
+        styles: { fontSize: 10 }
+      })
+
+      let finalY = (doc as any).lastAutoTable.finalY + 15
+
+      // Tabla de Consumos
+      doc.text('Consumo de Suministros', 14, finalY)
+      const consumosData = Object.entries(consumos || {}).map(([tipo, valor]) => [
+        tipo.toUpperCase(),
+        valor.toLocaleString() + (tipo === 'agua' ? ' m³' : tipo === 'luz' ? ' kWh' : ' m³')
+      ])
+
+      autoTable(doc, {
+        startY: finalY + 5,
+        head: [['Suministro', 'Total Consumido']],
+        body: consumosData.length ? consumosData : [['Sin datos', '0']],
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129] },
+        styles: { fontSize: 10 }
+      })
+
+      finalY = (doc as any).lastAutoTable.finalY + 15
+      
+      // Tabla de Incidencias por Zona
+      doc.text('Distribución de Incidencias por Zona', 14, finalY)
+      const zonesData = incs?.reduce((acc, curr) => {
+        acc[curr.location] = (acc[curr.location] || 0) + 1
+        return acc
+      }, {})
+      
+      const zonesTableData = Object.entries(zonesData || {}).map(([zona, count]) => [zona, count])
+
+      autoTable(doc, {
+        startY: finalY + 5,
+        head: [['Zona / Habitación', 'Total Incidencias']],
+        body: zonesTableData.length ? zonesTableData : [['Sin datos', '0']],
+        theme: 'striped',
+        headStyles: { fillColor: [245, 158, 11] },
+        styles: { fontSize: 10 }
+      })
+
+      doc.save(`Reporte_HotelOps_${start}_a_${end}.pdf`)
+      setIsReportModalOpen(false)
+    } catch (error) {
+      console.error('Error generating report:', error)
+      alert('Error al generar el reporte detallado.')
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   return (
@@ -139,9 +254,9 @@ export default function Dashboard() {
           <h1 className="page-title">Vista General</h1>
           <p className="page-subtitle">Resumen operativo en tiempo real</p>
         </div>
-        <button className="btn btn-primary" onClick={prepareReport}>
-          <Activity size={18} />
-          <span>Generar Reporte</span>
+        <button className="btn btn-primary" onClick={() => setIsReportModalOpen(true)}>
+          <FileText size={18} />
+          <span>Generar Reporte Pro</span>
         </button>
       </div>
 
@@ -300,71 +415,73 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* MODAL DE REPORTE */}
+      {/* MODAL DE REPORTE PRO */}
       {isReportModalOpen && (
         <div className="modal-overlay" onClick={() => setIsReportModalOpen(false)}>
-          <div className="modal-content report-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header hide-print">
+          <div className="modal-content" style={{maxWidth: '500px'}} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
               <div className="flex items-center gap-sm">
-                <FileText className="text-accent" />
-                <h2>Reporte de Operaciones</h2>
+                <FileText className="text-accent" size={24} />
+                <h2>Centro de Reportes Pro</h2>
               </div>
-              <div className="flex gap-sm">
-                <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
-                  <Printer size={16} /> Imprimir / PDF
-                </button>
-                <button className="btn-icon btn-ghost" onClick={() => setIsReportModalOpen(false)}><X size={20} /></button>
+              <button className="btn-icon btn-ghost" onClick={() => setIsReportModalOpen(false)}><X size={20} /></button>
+            </div>
+
+            <div className="modal-body p-xl">
+              <p className="text-sm text-muted mb-xl">
+                Selecciona el rango de fechas para consolidar las métricas de mantenimiento, incidencias y suministros en un documento ejecutivo PDF.
+              </p>
+              
+              <div className="grid-2 gap-md mb-xl">
+                <div className="input-group">
+                  <label className="input-label">Desde</label>
+                  <input 
+                    type="date" 
+                    className="input" 
+                    value={reportDates.start} 
+                    onChange={e => setReportDates({...reportDates, start: e.target.value})}
+                  />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">Hasta</label>
+                  <input 
+                    type="date" 
+                    className="input" 
+                    value={reportDates.end} 
+                    onChange={e => setReportDates({...reportDates, end: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="bg-accent/5 p-md rounded-md border-dashed-accent mb-xl">
+                <h4 className="text-xs font-bold text-accent mb-sm uppercase">Resumen del Informe:</h4>
+                <ul className="text-xs text-muted gap-xs flex flex-col">
+                  <li className="flex items-center gap-xs"><Check size={12} className="text-success" /> Consolidado de Incidencias Totales</li>
+                  <li className="flex items-center gap-xs"><Check size={12} className="text-success" /> Cálculo de Suministros (m³ / kWh)</li>
+                  <li className="flex items-center gap-xs"><Check size={12} className="text-success" /> Registro de Mantenimiento Preventivo</li>
+                </ul>
               </div>
             </div>
 
-            <div className="modal-body printable-area">
-              <div className="report-header text-center mb-xl">
-                <h1 className="text-2xl font-bold uppercase tracking-widest">HotelOps Pro - Reporte Operativo</h1>
-                <p className="text-muted">Fecha de generación: {reportData?.date}</p>
-              </div>
-
-              <div className="report-section mb-xl">
-                <h3 className="border-b pb-sm mb-md font-bold text-accent uppercase">Resumen de Incidencias</h3>
-                <table className="config-table w-full">
-                  <thead>
-                    <tr><th>Título</th><th>Ubicación</th><th>Prioridad</th><th>Estado</th></tr>
-                  </thead>
-                  <tbody>
-                    {reportData?.incidents.map(inc => (
-                      <tr key={inc.id}>
-                        <td>{inc.title}</td>
-                        <td>{inc.location}</td>
-                        <td><span className={`priority-badge priority-${inc.priority}`}>{inc.priority?.toUpperCase()}</span></td>
-                        <td>{inc.status}</td>
-                      </tr>
-                    ))}
-                    {reportData?.incidents.length === 0 && <tr><td colSpan="4" className="text-center p-md">Sin incidencias en el periodo.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="report-section">
-                <h3 className="border-b pb-sm mb-md font-bold text-accent uppercase">Mantenimiento Preventivo Ejecutado</h3>
-                <table className="config-table w-full">
-                  <thead>
-                    <tr><th>Tarea</th><th>Fecha</th><th>Notas</th></tr>
-                  </thead>
-                  <tbody>
-                    {reportData?.maintenance.map(m => (
-                      <tr key={m.id}>
-                        <td>{m.tarea?.titulo}</td>
-                        <td>{new Date(m.completado_el).toLocaleDateString()}</td>
-                        <td className="text-xs">{m.notas}</td>
-                      </tr>
-                    ))}
-                    {reportData?.maintenance.length === 0 && <tr><td colSpan="3" className="text-center p-md">Sin registros de mantenimiento.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="report-footer mt-2xl pt-xl border-t text-center text-xs text-muted">
-                Este reporte fue generado automáticamente por el sistema de gestión HotelOps Pro.
-              </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setIsReportModalOpen(false)}>Cancelar</button>
+              <button 
+                className="btn btn-primary ml-md" 
+                onClick={generateProReport} 
+                disabled={isGenerating}
+              >
+                {isGenerating ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    <span>Procesando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Printer size={16} />
+                    <span>Descargar PDF Pro</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
