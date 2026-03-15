@@ -1,17 +1,23 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Image as ImageIcon, Video, Paperclip, Check, CheckCheck, RefreshCw, Menu, X } from 'lucide-react'
+import { Send, Image as ImageIcon, Video, Paperclip, Check, CheckCheck, RefreshCw, Plus, Users, Search, MessageSquare, X, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useNotifications } from '../context/NotificationContext'
+import { useToast } from '../components/Toast'
 
 export default function Chat() {
   const { profile } = useAuth()
+  const toast = useToast()
   const [activeChannel, setActiveChannel] = useState('general')
   const [messages, setMessages] = useState([])
   const [channels, setChannels] = useState([])
+  const [allUsers, setAllUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [newMessage, setNewMessage] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [showNewChatModal, setShowNewChatModal] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  
   const { unreadPerChannel, clearChannelUnread } = useNotifications()
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -21,23 +27,41 @@ export default function Chat() {
   const activeChannelInfo = channels.find(c => c.id === activeChannel)
 
   useEffect(() => {
-    // Pedir permiso para notificaciones
     if (Notification.permission === 'default') {
       Notification.requestPermission()
     }
   }, [])
 
   useEffect(() => {
-    fetchChannels()
-  }, [])
+    if (profile) {
+      fetchChannelsAndUsers()
+    }
+  }, [profile])
 
-  const fetchChannels = async () => {
+  const fetchChannelsAndUsers = async () => {
     try {
-      const { data, error } = await supabase.from('canales').select('*').order('created_at', { ascending: true })
-      if (error) throw error
-      setChannels(data)
-    } catch (error) {
+      // 1. Fetch canales
+      // Por RLS, esto devolverá públicos + privados donde soy miembro
+      const { data: channelsData, error: channelsError } = await supabase
+        .from('canales')
+        .select('*')
+        .order('created_at', { ascending: true })
+
+      if (channelsError) throw channelsError
+      setChannels(channelsData)
+
+      // 2. Fetch usuarios para DMs
+      const { data: usersData, error: usersError } = await supabase
+        .from('perfiles')
+        .select('id, nombre, rol')
+        .neq('id', profile.id)
+        
+      if (usersError) throw usersError
+      setAllUsers(usersData)
+      
+    } catch (error: any) {
       console.error('Error fetching channels:', error)
+      toast.error('Error cargando canales')
     }
   }
 
@@ -87,21 +111,37 @@ export default function Chat() {
 
       if (error) throw error
 
-      const formatted = data.map(m => ({
-        id: m.id,
-        text: m.text_content,
-        sender: m.sender?.nombre || 'Desconocido',
-        role: m.sender?.rol || 'Staff',
-        time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isMe: m.sender_id === profile?.id,
-        read: m.read,
-        mediaUrl: m.media_url,
-        mediaType: m.media_type
-      }))
+      const formatted = data.map(m => {
+        // En DMs, marcar como leído provisionalmente a true o confiar en m.read
+        const hasBeenReadByOthers = false 
+
+        return {
+          id: m.id,
+          text: m.text_content,
+          sender: m.sender?.nombre || 'Desconocido',
+          role: m.sender?.rol || 'Staff',
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isMe: m.sender_id === profile?.id,
+          read: m.read || hasBeenReadByOthers,
+          mediaUrl: m.media_url,
+          mediaType: m.media_type
+        }
+      })
 
       setMessages(formatted)
-    } catch (error) {
+
+      // Marcar mensajes no leídos automáticamente al abrir
+      const unreadIds = data
+        .filter(m => m.sender_id !== profile.id)
+        .map(m => m.id)
+
+      if (unreadIds.length > 0) {
+        await supabase.from('mensajes').update({ read: true }).in('id', unreadIds)
+      }
+
+    } catch (error: any) {
       console.error('Error fetching messages:', error)
+      toast.error('Error cargando mensajes')
     } finally {
       setLoading(false)
     }
@@ -141,10 +181,32 @@ export default function Chat() {
       }])
 
     } catch (error) {
-      alert('Error subiendo archivo: ' + error.message)
+      toast.error('Error subiendo archivo')
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleSend = async (e: any) => {
+    e.preventDefault()
+    if (!newMessage.trim() || !profile) return
+
+    setUploading(true)
+    try {
+      const { error } = await supabase.from('mensajes').insert([{
+        channel: activeChannel,
+        text_content: newMessage.trim(),
+        sender_id: profile.id
+      }])
+      
+      if (error) throw error
+      
+      setNewMessage('')
+    } catch (error: any) {
+      toast.error('Error enviando mensaje')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -156,25 +218,103 @@ export default function Chat() {
     scrollToBottom()
   }, [messages])
 
-  const handleSend = async (e) => {
-    e.preventDefault()
-    if (!newMessage.trim() || !profile) return
+  const handleCreateDirectMessage = async (targetUser) => {
+    try {
+      // Create a unique channel ID for the DM
+      const channelId = `dm_${[profile.id, targetUser.id].sort().join('_')}`
+      const channelName = profile.nombre + ' & ' + targetUser.nombre
 
-    const pendingMsg = newMessage
-    setNewMessage('')
+      // Check if channel already exists
+      const { data: existingChannel, error: checkError } = await supabase
+        .from('canales')
+        .select('*')
+        .eq('id', channelId)
+        .maybeSingle()
+
+      if (!existingChannel) {
+        // Create new direct channel
+        const { error: insertCanalError } = await supabase
+          .from('canales')
+          .insert([{ 
+            id: channelId, 
+            nombre: channelName
+          }])
+
+        if (insertCanalError) throw insertCanalError
+
+        // Add both users as members
+        const { error: membersError } = await supabase
+          .from('canal_miembros')
+          .insert([
+            { canal_id: channelId, user_id: profile.id },
+            { canal_id: channelId, user_id: targetUser.id }
+          ])
+
+        if (membersError) throw membersError
+      }
+
+      setShowNewChatModal(false)
+      await fetchChannelsAndUsers()
+      setActiveChannel(channelId)
+      setShowChatMobile(true)
+
+    } catch (error) {
+      console.error('Error creating DM:', error)
+      toast.error('Error creando chat: ' + error.message)
+    }
+  }
+
+  const getChannelDisplayName = (channel) => {
+    // Detectar DM por prefijo del ID en vez de columna 'type'
+    if (channel.id.startsWith('dm_')) {
+      const names = channel.nombre.split(' & ')
+      return names.find(n => n !== profile.nombre) || 'Usuario'
+    }
+    return channel.nombre
+  }
+
+  const handleDeleteChat = async () => {
+    const channelName = activeChannelInfo?.nombre || activeChannel
+    if (!confirm(`¿Eliminar TODOS los mensajes y archivos multimedia del chat "${channelName}"? Esta acción no se puede deshacer.`)) return
 
     try {
+      // 1. Obtener mensajes con media para borrar archivos del storage
+      const { data: msgsWithMedia } = await supabase
+        .from('mensajes')
+        .select('media_url')
+        .eq('channel', activeChannel)
+        .not('media_url', 'is', null)
+
+      // 2. Borrar archivos del storage (best-effort)
+      if (msgsWithMedia && msgsWithMedia.length > 0) {
+        const filePaths = msgsWithMedia
+          .map(m => {
+            try {
+              const url = new URL(m.media_url)
+              const parts = url.pathname.split('/chat-media/')
+              return parts.length > 1 ? parts[1] : null
+            } catch { return null }
+          })
+          .filter(Boolean)
+
+        if (filePaths.length > 0) {
+          await supabase.storage.from('chat-media').remove(filePaths)
+        }
+      }
+
+      // 3. Borrar todos los mensajes del canal
       const { error } = await supabase
         .from('mensajes')
-        .insert([{
-          channel: activeChannel,
-          text_content: pendingMsg,
-          sender_id: profile.id
-        }])
+        .delete()
+        .eq('channel', activeChannel)
 
       if (error) throw error
-    } catch (error) {
-      console.error('Error sending message:', error)
+
+      setMessages([])
+      toast.success(`Chat "${channelName}" limpiado correctamente.`)
+    } catch (error: any) {
+      console.error('Error deleting chat:', error)
+      toast.error('Error al borrar el chat')
     }
   }
 
@@ -187,14 +327,36 @@ export default function Chat() {
           <div className="chat-sidebar-header border-b">
             <div className="flex items-center justify-between">
               <h3>Mensajes</h3>
+              <button 
+                className="btn-icon btn-ghost text-primary" 
+                onClick={() => setShowNewChatModal(true)}
+                title="Nuevo Chat/Grupo"
+              >
+                <Plus size={20} />
+              </button>
             </div>
             <div className="search-bar variant-small mt-md">
-              <input type="text" placeholder="Buscar chat..." className="search-input" />
+              <input 
+                type="text" 
+                placeholder="Buscar chat..." 
+                className="search-input" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
           
           <div className="conversation-list">
-            {channels.map(channel => {
+            {channels.filter(c => getChannelDisplayName(c).toLowerCase().includes(searchQuery.toLowerCase())).map(channel => {
+              const displayName = getChannelDisplayName(channel)
+              const firstLetter = displayName?.charAt(0).toUpperCase()
+              
+              let avatarClass = 'bg-secondary text-muted'
+              if (channel.id === 'general') avatarClass = 'avatar-gradient'
+              else if (channel.id === 'mantenimiento') avatarClass = 'bg-info-light text-info'
+              else if (channel.id === 'limpieza') avatarClass = 'bg-success-light text-success'
+              else if (channel.type === 'direct') avatarClass = 'bg-primary-light text-primary'
+
               return (
                 <div 
                   key={channel.id} 
@@ -204,12 +366,12 @@ export default function Chat() {
                     setShowChatMobile(true)
                   }}
                 >
-                  <div className={`avatar ${channel.id === 'general' ? 'avatar-gradient' : channel.id === 'mantenimiento' ? 'bg-info-light text-info' : channel.id === 'limpieza' ? 'bg-success-light text-success' : 'bg-secondary text-muted'}`}>
-                    {channel.nombre?.charAt(0).toUpperCase()}
+                  <div className={`avatar ${avatarClass}`}>
+                    {firstLetter}
                   </div>
                   <div className="conversation-details">
                     <div className="conversation-top">
-                      <h4>{channel.nombre}</h4>
+                      <h4>{displayName}</h4>
                     </div>
                     {unreadPerChannel[channel.id] > 0 && (
                       <div className="unread-badge">{unreadPerChannel[channel.id]}</div>
@@ -236,6 +398,14 @@ export default function Chat() {
                 <span className="text-sm text-success">● Staff Online</span>
               </div>
             </div>
+            <button 
+              className="btn-icon btn-ghost" 
+              onClick={handleDeleteChat}
+              title="Borrar chat y multimedia"
+              style={{ color: '#ef4444' }}
+            >
+              <Trash2 size={18} />
+            </button>
           </div>
           
           <div className="messages-container">
@@ -340,7 +510,97 @@ export default function Chat() {
         </div>
       </div>
 
+      {/* Modal para Nuevo Chat / Chat Privado */}
+      {showNewChatModal && (
+        <div className="modal-overlay" onClick={() => setShowNewChatModal(false)}>
+          <div className="modal-content glass-card p-none animate-scale-in max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <div className="modal-header border-b p-lg flex items-center justify-between">
+              <h2 className="text-xl font-bold flex items-center gap-sm">
+                <MessageSquare size={24} className="text-primary" /> Nuevo Chat
+              </h2>
+              <button className="btn-icon btn-ghost" onClick={() => setShowNewChatModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="modal-body p-lg">
+              <div className="mb-md">
+                <h3 className="text-sm font-semibold text-muted mb-sm uppercase tracking-wider">Contactos (Mensaje Directo)</h3>
+                <div className="users-list">
+                  {allUsers.length > 0 ? (
+                    allUsers.map(user => (
+                      <div 
+                        key={user.id} 
+                        className="user-list-item flex items-center gap-md p-md rounded-md cursor-pointer hover-bg-light transition-all"
+                        onClick={() => handleCreateDirectMessage(user)}
+                      >
+                        <div className="avatar bg-primary-light text-primary">
+                          {user.nombre?.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-medium">{user.nombre}</div>
+                          <div className="text-xs text-muted capitalize">{user.rol}</div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted italic p-md">No hay otros usuarios registrados.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 100;
+        }
+        .max-w-md { max-width: 28rem; }
+        .w-full { width: 100%; }
+        .p-none { padding: 0; }
+        .p-lg { padding: var(--spacing-lg); }
+        .p-md { padding: var(--spacing-md); }
+        .mb-sm { margin-bottom: var(--spacing-sm); }
+        .mb-md { margin-bottom: var(--spacing-md); }
+        .text-xl { font-size: 1.25rem; font-weight: 700; }
+        .text-sm { font-size: 0.875rem; }
+        .text-xs { font-size: 0.75rem; }
+        .font-semibold { font-weight: 600; }
+        .font-medium { font-weight: 500; }
+        .uppercase { text-transform: uppercase; }
+        .tracking-wider { letter-spacing: 0.05em; }
+        .capitalize { text-transform: capitalize; }
+        .rounded-md { border-radius: 0.375rem; }
+        .cursor-pointer { cursor: pointer; }
+        .transition-all { transition: all 0.2s; }
+        
+        .animate-scale-in {
+          animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .users-list {
+          max-height: 300px;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .hover-bg-light:hover {
+          background: rgba(255, 255, 255, 0.05);
+        }
+
         .chat-page {
           height: calc(100vh - var(--header-height) - calc(var(--spacing-xl) * 2));
           display: flex;

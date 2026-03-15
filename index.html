@@ -1,13 +1,24 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>hotelops-pro</title>
+    <meta name="theme-color" content="#0a0a1a">
+    <meta name="description" content="HotelOps Pro - Plataforma integral de gestión operativa para hoteles">
+    <title>HotelOps Pro</title>
   </head>
   <body>
+    <script>
+      window.addEventListener('error', function(e) {
+        document.body.innerHTML += '<div style="background:white;color:red;font-size:24px;z-index:9999;position:absolute;top:0;left:0;padding:20px;">Error: ' + e.message + '<br>' + e.filename + ':' + e.lineno + '</div>';
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        document.body.innerHTML += '<div style="background:white;color:red;font-size:24px;z-index:9999;position:absolute;top:50%;left:0;padding:20px;">Promise Error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '</div>';
+      });
+    </script>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

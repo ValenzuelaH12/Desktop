@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Plus, Filter, Search, MoreVertical, MapPin, Clock, X, CheckCircle, Image as ImageIcon, Video, Paperclip, MessageSquare, History, AlertCircle, RefreshCw } from 'lucide-react'
+import { Plus, Filter, Search, MoreVertical, MapPin, Clock, X, CheckCircle, Image as ImageIcon, Video, Paperclip, MessageSquare, History, AlertCircle, RefreshCw, Download, FileText, FileSpreadsheet, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../components/Toast'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
 
 export default function Incidencias() {
   const { user, profile } = useAuth()
+  const toast = useToast()
   const [activeTab, setActiveTab] = useState('activas')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [newIncident, setNewIncident] = useState({ title: '', location: '', priority: 'medium', descripcion: '', media_urls: [] })
@@ -17,6 +21,7 @@ export default function Incidencias() {
   const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [staff, setStaff] = useState([])
+  const [showExportMenu, setShowExportMenu] = useState(false)
 
   useEffect(() => {
     fetchIncidents()
@@ -244,6 +249,103 @@ export default function Incidencias() {
     }
   }
 
+  const handleDeleteIncident = async (id) => {
+    if (!confirm('¿Estás seguro de que deseas eliminar esta incidencia? Esta acción no se puede deshacer.')) return
+    try {
+      const { error, count } = await supabase
+        .from('incidencias')
+        .delete()
+        .eq('id', id)
+        .select()
+      
+      if (error) throw error
+
+      // Verificar si realmente se eliminó (RLS puede bloquearlo silenciosamente)
+      const { data: check } = await supabase
+        .from('incidencias')
+        .select('id')
+        .eq('id', id)
+        .maybeSingle()
+
+      if (check) {
+        toast.error('No se pudo eliminar la incidencia. Verifica permisos RLS.')
+        return
+      }
+
+      setIsDetailPanelOpen(false)
+      setSelectedIncident(null)
+      fetchIncidents()
+      toast.success('Incidencia eliminada correctamente.')
+    } catch (error) {
+      console.error('Error deleting incident:', error)
+      toast.error('Error al eliminar: ' + error.message)
+    }
+  }
+
+  const exportToCSV = () => {
+    const headers = ['ID', 'Título', 'Ubicación', 'Prioridad', 'Estado', 'Reportado por', 'Asignado a', 'Fecha']
+    
+    const csvData = filteredIncidents.map(inc => [
+      inc.id,
+      `"${inc.title.replace(/"/g, '""')}"`,
+      `"${inc.location}"`,
+      inc.priority === 'high' ? 'Alta' : inc.priority === 'medium' ? 'Media' : 'Baja',
+      STATUS_DETAILS[inc.status]?.label || inc.status,
+      `"${inc.reporter}"`,
+      `"${inc.assignee_name}"`,
+      inc.time
+    ])
+
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `Incidencias_HotelOps_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setShowExportMenu(false)
+  }
+
+  const exportToPDF = () => {
+    const doc = new jsPDF()
+    
+    doc.setFontSize(18)
+    doc.text('Reporte de Incidencias - HotelOps Pro', 14, 22)
+    
+    doc.setFontSize(11)
+    doc.setTextColor(100)
+    doc.text(`Fecha de exportación: ${new Date().toLocaleDateString()}`, 14, 30)
+
+    const tableData = filteredIncidents.map(inc => [
+      inc.id,
+      inc.title,
+      inc.location,
+      inc.priority === 'high' ? 'Alta' : inc.priority === 'medium' ? 'Media' : 'Baja',
+      STATUS_DETAILS[inc.status]?.label || inc.status,
+      inc.assignee_name
+    ])
+
+    doc.autoTable({
+      startY: 36,
+      head: [['ID', 'Título', 'Ubicación', 'Prioridad', 'Estado', 'Asignado']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [99, 102, 241] },
+      styles: { fontSize: 9 },
+      margin: { top: 36 }
+    })
+
+    doc.save(`Incidencias_HotelOps_${new Date().toISOString().split('T')[0]}.pdf`)
+    setShowExportMenu(false)
+  }
+
   return (
     <div className="incidencias-page animate-fade-in">
       <div className="page-header">
@@ -289,6 +391,35 @@ export default function Incidencias() {
           <button className="btn btn-secondary btn-icon">
             <Filter size={18} />
           </button>
+
+          <div className="relative">
+            <button 
+              className="btn btn-secondary flex items-center gap-sm"
+              onClick={() => setShowExportMenu(!showExportMenu)}
+            >
+              <Download size={18} />
+              <span className="hidden sm:inline">Exportar</span>
+            </button>
+            
+            {showExportMenu && (
+              <div className="absolute right-0 mt-sm w-48 glass-card border border-white/10 rounded-lg shadow-xl overflow-hidden z-20 animate-fade-in">
+                <button 
+                  className="w-full text-left px-md py-sm hover:bg-white/5 flex items-center gap-sm transition-colors text-sm"
+                  onClick={exportToCSV}
+                >
+                  <FileSpreadsheet size={16} className="text-success" />
+                  Descargar CSV
+                </button>
+                <button 
+                  className="w-full text-left px-md py-sm hover:bg-white/5 flex items-center gap-sm transition-colors text-sm border-t border-white/5"
+                  onClick={exportToPDF}
+                >
+                  <FileText size={16} className="text-danger" />
+                  Descargar PDF
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -608,6 +739,17 @@ export default function Incidencias() {
                   {selectedIncident.descripcion || "No hay descripción adicional para esta incidencia."}
                 </div>
               </section>
+
+              {/* Botón Eliminar */}
+              <div className="mt-xl pt-lg border-t border-white/5">
+                <button 
+                  className="btn btn-sm flex items-center gap-sm w-full justify-center" 
+                  style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                  onClick={() => handleDeleteIncident(selectedIncident.id)}
+                >
+                  <Trash2 size={16} /> Eliminar Incidencia
+                </button>
+              </div>
             </div>
           </div>
         </div>

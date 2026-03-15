@@ -10,10 +10,15 @@ import {
   RefreshCw,
   X,
   Edit2,
-  Trash2
+  Trash2,
+  Download,
+  FileSpreadsheet,
+  FileText
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 export default function Inventory() {
   const { profile } = useAuth()
@@ -23,6 +28,7 @@ export default function Inventory() {
   const [filter, setFilter] = useState('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
+  const [showExportMenu, setShowExportMenu] = useState(false)
   const [formData, setFormData] = useState({
     nombre: '',
     categoria: '',
@@ -120,6 +126,79 @@ export default function Inventory() {
 
   const categories = [...new Set(items.map(i => i.categoria))]
 
+  const exportToCSV = () => {
+    const headers = ['ID', 'Nombre', 'Categoría', 'Stock Actual', 'Stock Mínimo', 'Unidad', 'Última Actualización']
+    
+    const csvData = filteredItems.map(item => [
+      item.id,
+      `"${item.nombre.replace(/"/g, '""')}"`,
+      `"${item.categoria}"`,
+      item.stock_actual,
+      item.stock_minimo,
+      `"${item.unidad}"`,
+      item.ultima_actualizacion ? new Date(item.ultima_actualizacion).toLocaleString() : 'N/A'
+    ])
+
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `Inventario_HotelOps_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setShowExportMenu(false)
+  }
+
+  const exportToPDF = () => {
+    const doc = new jsPDF()
+    
+    doc.setFontSize(18)
+    doc.text('Reporte de Inventario - HotelOps Pro', 14, 22)
+    
+    doc.setFontSize(11)
+    doc.setTextColor(100)
+    doc.text(`Fecha de exportación: ${new Date().toLocaleDateString()}`, 14, 30)
+
+    const tableData = filteredItems.map(item => [
+      item.nombre,
+      item.categoria,
+      `${item.stock_actual} ${item.unidad}`,
+      `${item.stock_minimo} ${item.unidad}`,
+      item.stock_actual <= item.stock_minimo ? 'Bajo' : 'Normal',
+      item.ultima_actualizacion ? new Date(item.ultima_actualizacion).toLocaleDateString() : 'N/A'
+    ])
+
+    autoTable(doc, {
+      startY: 36,
+      head: [['Artículo', 'Categoría', 'Stock', 'Mínimo', 'Estado', 'Actualizado']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [99, 102, 241] },
+      styles: { fontSize: 9 },
+      margin: { top: 36 },
+      didParseCell: function(data) {
+        if (data.section === 'body' && data.column.index === 4) {
+          if (data.cell.raw === 'Bajo') {
+            data.cell.styles.textColor = [239, 68, 68];
+            data.cell.styles.fontStyle = 'bold';
+          } else {
+            data.cell.styles.textColor = [16, 185, 129];
+          }
+        }
+      }
+    })
+
+    doc.save(`Inventario_HotelOps_${new Date().toISOString().split('T')[0]}.pdf`)
+    setShowExportMenu(false)
+  }
+
   return (
     <div className="inventory-page animate-fade-in">
       <div className="page-header">
@@ -144,7 +223,7 @@ export default function Inventory() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex gap-sm">
+        <div className="flex gap-sm items-center">
           <button 
             className={`btn btn-sm ${filter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setFilter('all')}
@@ -157,9 +236,38 @@ export default function Inventory() {
           >
             Stock Bajo
           </button>
-          <button className="btn btn-ghost btn-sm" onClick={fetchInventory}>
+          <button className="btn btn-ghost btn-sm" onClick={fetchInventory} title="Refrescar">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
+
+          <div className="relative ml-sm pl-sm border-l border-white/10">
+            <button 
+              className="btn btn-secondary btn-sm flex items-center gap-xs"
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              title="Exportar Inventario"
+            >
+              <Download size={14} />
+            </button>
+            
+            {showExportMenu && (
+              <div className="absolute right-0 mt-sm w-44 glass-card border border-white/10 rounded-lg shadow-xl overflow-hidden z-20 animate-fade-in">
+                <button 
+                  className="w-full text-left px-md py-sm hover:bg-white/5 flex items-center gap-sm transition-colors text-xs"
+                  onClick={exportToCSV}
+                >
+                  <FileSpreadsheet size={14} className="text-success" />
+                  Descargar CSV
+                </button>
+                <button 
+                  className="w-full text-left px-md py-sm hover:bg-white/5 flex items-center gap-sm transition-colors text-xs border-t border-white/5"
+                  onClick={exportToPDF}
+                >
+                  <FileText size={14} className="text-danger" />
+                  Descargar PDF
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -218,69 +326,67 @@ export default function Inventory() {
       </div>
 
       {isModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{editingItem ? 'Editar Artículo' : 'Nuevo Artículo'}</h2>
+        <div 
+          onClick={() => setIsModalOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '1rem'
+          }}
+        >
+          <div 
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#1a1a2e',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '1rem',
+              width: '100%',
+              maxWidth: '500px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 600 }}>{editingItem ? 'Editar Artículo' : 'Nuevo Artículo'}</h2>
               <button className="btn-icon btn-ghost" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
             </div>
             <form onSubmit={handleSubmit}>
-              <div className="modal-body">
-                <div className="grid grid-cols-2 gap-md">
-                  <div className="input-group col-span-2">
-                    <label className="input-label">Nombre del artículo</label>
-                    <input 
-                      type="text" 
-                      className="input" 
-                      value={formData.nombre}
-                      onChange={e => setFormData({...formData, nombre: e.target.value})}
-                      required 
-                    />
-                  </div>
+              <div style={{ padding: '1.25rem 1.5rem' }}>
+                <div className="input-group mb-md">
+                  <label className="input-label">Nombre del artículo</label>
+                  <input type="text" className="input" value={formData.nombre}
+                    onChange={e => setFormData({...formData, nombre: e.target.value})} required />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                   <div className="input-group">
                     <label className="input-label">Categoría</label>
-                    <input 
-                      type="text" 
-                      className="input" 
-                      list="categories"
-                      value={formData.categoria}
-                      onChange={e => setFormData({...formData, categoria: e.target.value})}
-                      required 
-                    />
-                    <datalist id="categories">
-                      {categories.map(c => <option key={c} value={c} />)}
-                    </datalist>
+                    <input type="text" className="input" list="categories" value={formData.categoria}
+                      onChange={e => setFormData({...formData, categoria: e.target.value})} required />
+                    <datalist id="categories">{categories.map(c => <option key={c} value={c} />)}</datalist>
                   </div>
                   <div className="input-group">
-                    <label className="input-label">Unidad (ej. bolsas, litros)</label>
-                    <input 
-                      type="text" 
-                      className="input" 
-                      value={formData.unidad}
-                      onChange={e => setFormData({...formData, unidad: e.target.value})}
-                    />
+                    <label className="input-label">Unidad</label>
+                    <input type="text" className="input" value={formData.unidad}
+                      onChange={e => setFormData({...formData, unidad: e.target.value})} />
                   </div>
                   <div className="input-group">
                     <label className="input-label">Stock Actual</label>
-                    <input 
-                      type="number" 
-                      className="input" 
-                      value={formData.stock_actual}
-                      onChange={e => setFormData({...formData, stock_actual: parseInt(e.target.value) || 0})}
-                    />
+                    <input type="number" className="input" value={formData.stock_actual}
+                      onChange={e => setFormData({...formData, stock_actual: parseInt(e.target.value) || 0})} />
                   </div>
                   <div className="input-group">
                     <label className="input-label">Stock Mínimo</label>
-                    <input 
-                      type="number" 
-                      className="input" 
-                      value={formData.stock_minimo}
-                      onChange={e => setFormData({...formData, stock_minimo: parseInt(e.target.value) || 0})}
-                    />
+                    <input type="number" className="input" value={formData.stock_minimo}
+                      onChange={e => setFormData({...formData, stock_minimo: parseInt(e.target.value) || 0})} />
                   </div>
                 </div>
               </div>
-              <div className="modal-footer">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1rem 1.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
                 <button type="submit" className="btn btn-primary">{editingItem ? 'Guardar Cambios' : 'Crear Artículo'}</button>
               </div>

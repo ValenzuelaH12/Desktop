@@ -236,3 +236,52 @@ DO $$ BEGIN
         EXISTS (SELECT 1 FROM public.perfiles WHERE id = auth.uid() AND (rol IN ('admin', 'direccion', 'mantenimiento', 'recepcion')))
     );
 EXCEPTION WHEN others THEN null; END $$;
+
+-- ACTUALIZACIONES PARA CHAT AVANZADO (FASE 3)
+-- Añadir tipo a la tabla de canales
+alter table public.canales add column if not exists type text default 'public' check (type in ('public', 'private', 'direct'));
+alter table public.canales add column if not exists created_by uuid references public.perfiles(id);
+
+-- Nueva tabla para miembros de canal
+create table if not exists public.canal_miembros (
+  id uuid default gen_random_uuid() primary key,
+  canal_id text references public.canales(id) on delete cascade not null,
+  user_id uuid references public.perfiles(id) on delete cascade not null,
+  joined_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(canal_id, user_id)
+);
+
+alter table public.canal_miembros enable row level security;
+
+-- Políticas para canal_miembros
+do $`$ begin create policy "Usuarios pueden ver miembros de canales públicos o donde son miembros" on public.canal_miembros for select using (
+  exists (select 1 from public.canales c where c.id = canal_miembros.canal_id and c.type = 'public') or
+  exists (select 1 from public.canal_miembros cm where cm.canal_id = canal_miembros.canal_id and cm.user_id = auth.uid())
+); exception when duplicate_object then null; end $`$;
+
+do $`$ begin create policy "Usuarios pueden unirse a canales públicos o ser añadidos" on public.canal_miembros for insert with check (
+  user_id = auth.uid() or 
+  exists (select 1 from public.canales c where c.id = canal_id and c.created_by = auth.uid())
+); exception when duplicate_object then null; end $`$;
+
+-- Update channels RLS
+drop policy if exists "Canales publicos" on public.canales;
+do $`$ begin create policy "Usuarios pueden ver canales públicos o donde son miembros" on public.canales for select using (
+  type = 'public' or
+  exists (select 1 from public.canal_miembros cm where cm.canal_id = id and cm.user_id = auth.uid())
+); exception when duplicate_object then null; end $`$;
+
+do $`$ begin create policy "Usuarios pueden crear canales" on public.canales for insert with check (true); exception when duplicate_object then null; end $`$;
+
+-- Lecturas detalladas (Read Receipts)
+create table if not exists public.mensaje_lecturas (
+  mensaje_id bigint references public.mensajes(id) on delete cascade not null,
+  user_id uuid references public.perfiles(id) on delete cascade not null,
+  read_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  primary key(mensaje_id, user_id)
+);
+
+alter table public.mensaje_lecturas enable row level security;
+do $`$ begin create policy "Cualquiera puede ver confirmaciones" on public.mensaje_lecturas for select using (true); exception when duplicate_object then null; end $`$;
+do $`$ begin create policy "Usuarios pueden confirmar lectura" on public.mensaje_lecturas for insert with check (user_id = auth.uid()); exception when duplicate_object then null; end $`$;
+

@@ -93,12 +93,16 @@ function AppRoutes() {
   )
 }
 
+import { ToastProvider } from './components/Toast'
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
-          <AppRoutes />
+          <ToastProvider>
+            <AppRoutes />
+          </ToastProvider>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>

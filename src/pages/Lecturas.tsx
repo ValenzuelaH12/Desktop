@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Activity, Plus, X, ArrowUpRight, ArrowDownRight, Droplets, Flame, Zap, Calendar } from 'lucide-react'
+import { Activity, Plus, X, ArrowUpRight, ArrowDownRight, Droplets, Flame, Zap, Calendar, Download, FileSpreadsheet, FileText } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 export default function Lecturas() {
   const { profile } = useAuth()
@@ -9,6 +11,7 @@ export default function Lecturas() {
   const [contadores, setContadores] = useState([])
   const [loading, setLoading] = useState(true)
   const [isAdding, setIsAdding] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
   const [msg, setMsg] = useState({ type: '', text: '' })
   const [newReading, setNewReading] = useState({
     contador_id: '',
@@ -112,6 +115,79 @@ export default function Lecturas() {
     }
   }
 
+  const exportToCSV = () => {
+    const headers = ['Fecha', 'Contador', 'Tipo', 'Valor Contador', 'Consumo (Último Periodo)', 'Unidad', 'Registrado por']
+    
+    const csvData = lecturas.map(l => [
+      new Date(l.fecha).toLocaleDateString(),
+      `"${l.contadores?.nombre || '---'}"`,
+      l.tipo,
+      l.valor,
+      l.consumo > 0 ? l.consumo.toFixed(2) : 0,
+      getUnit(l.tipo),
+      `"${l.perfiles?.nombre || '---'}"`
+    ])
+
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `Suministros_HotelOps_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setShowExportMenu(false)
+  }
+
+  const exportToPDF = () => {
+    const doc = new jsPDF()
+    
+    doc.setFontSize(18)
+    doc.text('Reporte de Consumos y Suministros - HotelOps Pro', 14, 22)
+    
+    doc.setFontSize(11)
+    doc.setTextColor(100)
+    doc.text(`Fecha de exportación: ${new Date().toLocaleDateString()}`, 14, 30)
+
+    const tableData = lecturas.map(l => [
+      new Date(l.fecha).toLocaleDateString(),
+      l.contadores?.nombre || '---',
+      l.tipo.charAt(0).toUpperCase() + l.tipo.slice(1),
+      `${l.valor.toLocaleString()} ${getUnit(l.tipo)}`,
+      l.consumo > 0 ? `${l.consumo.toFixed(2)} ${getUnit(l.tipo)}` : 'Primer registro',
+      l.perfiles?.nombre || '---'
+    ])
+
+    autoTable(doc, {
+      startY: 36,
+      head: [['Fecha', 'Contador', 'Tipo', 'Valor', 'Consumo', 'Registrado por']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [99, 102, 241] },
+      styles: { fontSize: 9 },
+      margin: { top: 36 },
+      didParseCell: function(data) {
+        if (data.section === 'body' && data.column.index === 4) {
+          if (data.cell.raw !== 'Primer registro') {
+             data.cell.styles.textColor = [239, 68, 68];
+             data.cell.styles.fontStyle = 'bold';
+          } else {
+             data.cell.styles.textColor = [156, 163, 175];
+          }
+        }
+      }
+    })
+
+    doc.save(`Suministros_HotelOps_${new Date().toISOString().split('T')[0]}.pdf`)
+    setShowExportMenu(false)
+  }
+
   return (
     <div className="lecturas-page animate-fade-in">
       <div className="page-header">
@@ -165,10 +241,39 @@ export default function Lecturas() {
       </div>
 
       <div className="glass-card table-panel">
-        <div className="panel-header border-b">
+        <div className="panel-header border-b flex justify-between items-center px-lg py-md">
           <div className="flex items-center gap-md">
             <Calendar size={20} className="text-accent" />
-            <h3>Historial de Mediciones</h3>
+            <h3 className="m-0">Historial de Mediciones</h3>
+          </div>
+          <div className="relative">
+            <button 
+              className="btn btn-secondary btn-sm flex items-center gap-xs"
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              title="Exportar Lecturas"
+            >
+              <Download size={14} />
+              <span className="hidden sm:inline">Exportar</span>
+            </button>
+            
+            {showExportMenu && (
+              <div className="absolute right-0 mt-sm w-44 glass-card border border-white/10 rounded-lg shadow-xl overflow-hidden z-20 animate-fade-in">
+                <button 
+                  className="w-full text-left px-md py-sm hover:bg-white/5 flex items-center gap-sm transition-colors text-xs"
+                  onClick={exportToCSV}
+                >
+                  <FileSpreadsheet size={14} className="text-success" />
+                  Descargar CSV
+                </button>
+                <button 
+                  className="w-full text-left px-md py-sm hover:bg-white/5 flex items-center gap-sm transition-colors text-xs border-t border-white/5"
+                  onClick={exportToPDF}
+                >
+                  <FileText size={14} className="text-danger" />
+                  Descargar PDF
+                </button>
+              </div>
+            )}
           </div>
         </div>
         <div className="panel-body p-none">
