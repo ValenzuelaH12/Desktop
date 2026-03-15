@@ -547,11 +547,12 @@ input, textarea, select {
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
   display: flex;
-  align-items: center; /* Centrado vertical exacto */
+  align-items: flex-start; /* Permite controlar la bajada exacta */
   justify-content: center;
   z-index: 10000;
   animation: fadeIn 0.2s ease;
-  padding: 20px;
+  padding: 12vh 20px 20px 20px; /* Forzado a bajar un 12% de la pantalla */
+  overflow-y: auto;
 }
 
 .modal-content {
@@ -561,16 +562,16 @@ input, textarea, select {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   width: 100%;
   max-width: 520px;
-  max-height: 90vh; /* Bajado un poco el límite para mayor margen */
+  max-height: fit-content;
   display: flex;
   flex-direction: column;
   animation: modalEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  overflow: hidden;
+  margin-bottom: 40px; /* Margen al final para que no pegue abajo */
 }
 
 @keyframes modalEnter {
-  from { transform: scale(0.95) translateY(10px); opacity: 0; }
-  to { transform: scale(1) translateY(0); opacity: 1; }
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 
 .modal-header {
