@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+import autoTable from 'jspdf-autotable'
 
 export default function Incidencias() {
   const { user, profile } = useAuth()
@@ -332,7 +332,7 @@ export default function Incidencias() {
       inc.assignee_name
     ])
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 36,
       head: [['ID', 'Título', 'Ubicación', 'Prioridad', 'Estado', 'Asignado']],
       body: tableData,
