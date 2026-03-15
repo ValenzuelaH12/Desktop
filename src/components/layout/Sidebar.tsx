@@ -42,7 +42,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
       <div className="sidebar-header border-b">
         <div className="flex items-center gap-sm flex-1">
           <Hotel className="text-accent" size={28} />
-          <h2>HotelOps <span className="text-accent">Pro</span></h2>
+          <h2>V-<span className="text-accent">Suite</span></h2>
         </div>
         <button className="btn-icon btn-ghost mobile-only" onClick={closeSidebar}>
           <X size={20} />

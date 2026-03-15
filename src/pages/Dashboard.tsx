@@ -173,7 +173,7 @@ export default function Dashboard() {
       
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(22)
-      doc.text('HOTELOPS PRO', 14, 25)
+      doc.text('V-SUITE', 14, 25)
       doc.setFontSize(10)
       doc.text('REPORTE EJECUTIVO DE OPERACIONES', 14, 32)
       

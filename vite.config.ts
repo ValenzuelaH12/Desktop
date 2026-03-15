@@ -10,8 +10,8 @@ export default defineConfig({
       injectRegister: 'auto',
       includeAssets: ['favicon.ico', 'favicon.svg', 'pwa-192x192.png', 'pwa-512x512.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'HotelOps Pro',
-        short_name: 'HotelOps',
+        name: 'V-Suite',
+        short_name: 'V-Suite',
         description: 'Plataforma integral de gestión operativa para hoteles',
         theme_color: '#0a0a1a',
         background_color: '#0a0a1a',
