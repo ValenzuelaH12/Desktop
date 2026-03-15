@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Activity, Plus, X, ArrowUpRight, ArrowDownRight, Droplets, Flame, Zap, Calendar, Download, FileSpreadsheet, FileText } from 'lucide-react'
+import { Activity, Plus, X, ArrowUpRight, ArrowDownRight, Droplets, Flame, Zap, Calendar, Download, FileSpreadsheet, FileText, Edit2, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import jsPDF from 'jspdf'
@@ -16,6 +16,7 @@ export default function Lecturas() {
   const [filterType, setFilterType] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [editingReading, setEditingReading] = useState(null)
   const [newReading, setNewReading] = useState({
     contador_id: '',
     valor: '',
@@ -117,6 +118,40 @@ export default function Lecturas() {
       default: return ''
     }
   }
+
+  const handleDelete = async (id) => {
+    if (!confirm('¿Seguro que quieres eliminar esta lectura?')) return
+    try {
+      const { error } = await supabase.from('lecturas').delete().eq('id', id)
+      if (error) throw error
+      setMsg({ type: 'success', text: 'Lectura eliminada correctamente.' })
+      fetchLecturas()
+    } catch (error) {
+      setMsg({ type: 'error', text: 'Error al eliminar: ' + error.message })
+    }
+  }
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault()
+    if (!editingReading) return
+    try {
+      const { error } = await supabase
+        .from('lecturas')
+        .update({
+          valor: parseFloat(editingReading.valor),
+          fecha: editingReading.fecha,
+          contador_id: editingReading.contador_id
+        })
+        .eq('id', editingReading.id)
+      if (error) throw error
+      setMsg({ type: 'success', text: 'Lectura actualizada correctamente.' })
+      setEditingReading(null)
+      fetchLecturas()
+    } catch (error) {
+      setMsg({ type: 'error', text: 'Error al actualizar: ' + error.message })
+    }
+  }
+
 
   const exportToCSV = () => {
     const headers = ['Fecha', 'Contador', 'Tipo', 'Valor Contador', 'Consumo (Último Periodo)', 'Unidad', 'Registrado por']
@@ -329,6 +364,7 @@ export default function Lecturas() {
                   <th>Valor Contador</th>
                   <th>Consumo</th>
                   <th>Registrado por</th>
+                  <th style={{ width: '90px', textAlign: 'center' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -361,10 +397,20 @@ export default function Lecturas() {
                       )}
                     </td>
                     <td className="text-muted text-sm">{l.perfiles?.nombre || '---'}</td>
+                    <td>
+                      <div className="flex items-center gap-xs" style={{ justifyContent: 'center' }}>
+                        <button className="btn-icon btn-ghost" title="Editar" onClick={() => setEditingReading({ id: l.id, valor: l.valor, fecha: l.fecha, contador_id: l.contador_id })}>
+                          <Edit2 size={14} className="text-accent" />
+                        </button>
+                        <button className="btn-icon btn-ghost" title="Eliminar" onClick={() => handleDelete(l.id)}>
+                          <Trash2 size={14} style={{ color: '#f87171' }} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={6} className="text-center p-xl text-muted">No hay lecturas para los filtros seleccionados.</td>
+                    <td colSpan={7} className="text-center p-xl text-muted">No hay lecturas para los filtros seleccionados.</td>
                   </tr>
                 )
                 })()}
@@ -424,6 +470,63 @@ export default function Lecturas() {
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setIsAdding(false)}>Cancelar</button>
                 <button type="submit" className="btn btn-primary">Guardar Lectura</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Lectura */}
+      {editingReading && (
+        <div className="modal-overlay" onClick={() => setEditingReading(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Editar Lectura</h2>
+              <button className="btn-icon btn-ghost" onClick={() => setEditingReading(null)}><X size={20} /></button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="modal-body">
+                <div className="input-group mb-md">
+                  <label className="input-label">Contador</label>
+                  <select
+                    className="select"
+                    value={editingReading.contador_id}
+                    onChange={e => setEditingReading({...editingReading, contador_id: e.target.value})}
+                    required
+                  >
+                    {contadores.map(c => (
+                      <option key={c.id} value={c.id}>{c.nombre} ({c.tipo})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid-2 gap-md">
+                  <div className="input-group">
+                    <label className="input-label">Fecha</label>
+                    <input
+                      type="date"
+                      className="input"
+                      value={editingReading.fecha}
+                      onChange={e => setEditingReading({...editingReading, fecha: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Valor Actual</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input"
+                      placeholder="0.00"
+                      value={editingReading.valor}
+                      onChange={e => setEditingReading({...editingReading, valor: e.target.value})}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setEditingReading(null)}>Cancelar</button>
+                <button type="submit" className="btn btn-primary">Guardar Cambios</button>
               </div>
             </form>
           </div>
