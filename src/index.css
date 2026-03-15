@@ -1,5 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
+/* Utilities */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.gap-xs { gap: 0.25rem; }
+.gap-sm { gap: 0.5rem; }
+
 :root {
   /* Colores principales */
   --color-bg-primary: #0a0a1a;
