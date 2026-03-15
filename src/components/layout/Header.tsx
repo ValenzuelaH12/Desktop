@@ -12,18 +12,15 @@ export default function Header({ toggleSidebar }) {
   const [loading, setLoading] = useState(false)
   const { totalUnread: totalChatUnread, chatNotifications } = useNotifications()
 
-  useEffect(() => {
-    fetchNotifications()
-    // Suscripción en tiempo real opcional aquí, pero por ahora fetch inicial
-    const interval = setInterval(fetchNotifications, 30000) // Refrescar cada 30s
-    return () => clearInterval(interval)
-  }, [])
+  // Search global
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
 
   const fetchNotifications = async () => {
     try {
       const today = new Date().toISOString().split('T')[0]
-      
-      // 1. Incidencias urgentes/pendientes
       const { data: incs } = await supabase
         .from('incidencias')
         .select('id, title, priority, created_at')
@@ -31,7 +28,6 @@ export default function Header({ toggleSidebar }) {
         .order('created_at', { ascending: false })
         .limit(5)
 
-      // 2. Mantenimientos vencidos o para hoy
       const { data: mantos } = await supabase
         .from('mantenimiento_preventivo')
         .select('id, titulo, proxima_fecha')
@@ -39,42 +35,82 @@ export default function Header({ toggleSidebar }) {
         .limit(5)
 
       const formattedNotifications = [
-        ...chatNotifications.map(n => ({
-          ...n,
-          icon: MessageSquare,
-        })),
+        ...chatNotifications.map(n => ({ ...n, icon: MessageSquare })),
         ...(incs || []).map(i => ({
-          id: `inc-${i.id}`,
-          type: 'incidencia',
-          title: i.title,
+          id: `inc-${i.id}`, type: 'incidencia', title: i.title,
           subtitle: `Prioridad ${i.priority}`,
           time: new Date(i.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          link: '/incidencias',
-          icon: AlertTriangle,
+          link: '/incidencias', icon: AlertTriangle,
           color: i.priority === 'high' ? 'danger' : 'warning'
         })),
         ...(mantos || []).map(m => ({
-          id: `manto-${m.id}`,
-          type: 'mantenimiento',
-          title: m.titulo,
-          subtitle: `Vence: ${m.proxima_fecha}`,
-          time: 'Hoy',
-          link: '/planificacion',
-          icon: Clock,
-          color: 'info'
+          id: `manto-${m.id}`, type: 'mantenimiento', title: m.titulo,
+          subtitle: `Vence: ${m.proxima_fecha}`, time: 'Hoy',
+          link: '/planificacion', icon: Clock, color: 'info'
         }))
       ]
-
       setNotifications(formattedNotifications)
-    } catch (error) {
-      console.error('Error fetching notifications:', error)
-    }
+    } catch (error) { console.error('Error fetching notifications:', error) }
   }
 
   const handleNotificationClick = (link) => {
     navigate(link)
     setShowNotifications(false)
   }
+
+  useEffect(() => {
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Búsqueda con debounce
+  useEffect(() => {
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([])
+      setShowSearch(false)
+      return
+    }
+    const timer = setTimeout(async () => {
+      setSearchLoading(true)
+      setShowSearch(true)
+      const q = searchQuery.trim().toLowerCase()
+      const results = []
+      try {
+        const { data: incs } = await supabase
+          .from('incidencias')
+          .select('id, title, location, status, priority')
+          .or(`title.ilike.%${q}%,location.ilike.%${q}%`)
+          .limit(5)
+        if (incs) results.push(...incs.map(i => ({ ...i, _type: 'incidencia', _link: '/incidencias' })))
+
+        const { data: inv } = await supabase
+          .from('inventario')
+          .select('id, nombre, categoria, stock_actual')
+          .or(`nombre.ilike.%${q}%,categoria.ilike.%${q}%`)
+          .limit(5)
+        if (inv) results.push(...inv.map(i => ({ ...i, _type: 'inventario', _link: '/inventario' })))
+
+        const { data: rooms } = await supabase
+          .from('habitaciones')
+          .select('id, nombre')
+          .ilike('nombre', `%${q}%`)
+          .limit(5)
+        if (rooms) results.push(...rooms.map(r => ({ ...r, _type: 'habitacion', _link: '/configuracion' })))
+
+      } catch(e) { console.error(e) }
+      setSearchResults(results)
+      setSearchLoading(false)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  const handleSearchSelect = (link) => {
+    navigate(link)
+    setSearchQuery('')
+    setShowSearch(false)
+  }
+
   return (
     <header className="header glass border-b">
       <div className="header-left">
@@ -82,13 +118,57 @@ export default function Header({ toggleSidebar }) {
           <Menu size={20} />
         </button>
 
-        <div className="search-bar">
+        <div className="search-bar" style={{ position: 'relative' }}>
           <Search size={18} className="search-icon" />
           <input 
             type="text" 
-            placeholder="Buscar incidencias, habitaciones..." 
+            placeholder="Buscar incidencias, habitaciones, inventario..." 
             className="search-input"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onFocus={() => searchResults.length > 0 && setShowSearch(true)}
+            onBlur={() => setTimeout(() => setShowSearch(false), 200)}
           />
+          {showSearch && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
+              background: 'rgba(15,15,35,0.97)', backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.75rem',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.5)', zIndex: 200,
+              maxHeight: '320px', overflowY: 'auto'
+            }}>
+              {searchLoading ? (
+                <div style={{ padding: '1rem', textAlign: 'center', color: '#6b6b8d', fontSize: '0.8rem' }}>Buscando...</div>
+              ) : searchResults.length === 0 ? (
+                <div style={{ padding: '1rem', textAlign: 'center', color: '#6b6b8d', fontSize: '0.8rem' }}>Sin resultados para "{searchQuery}"</div>
+              ) : (
+                searchResults.map((r, idx) => (
+                  <div key={idx} style={{
+                    padding: '0.6rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.15s'
+                  }} onMouseDown={() => handleSearchSelect(r._link)}
+                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <span style={{
+                      fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
+                      padding: '2px 6px', borderRadius: '4px', flexShrink: 0,
+                      background: r._type === 'incidencia' ? 'rgba(239,68,68,0.15)' : r._type === 'inventario' ? 'rgba(16,185,129,0.15)' : 'rgba(99,102,241,0.15)',
+                      color: r._type === 'incidencia' ? '#f87171' : r._type === 'inventario' ? '#4ade80' : '#a5b4fc'
+                    }}>{r._type === 'incidencia' ? 'INC' : r._type === 'inventario' ? 'INV' : 'HAB'}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {r.title || r.nombre}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#6b6b8d' }}>
+                        {r._type === 'incidencia' ? `${r.location} · ${r.status}` : r._type === 'inventario' ? `${r.categoria} · Stock: ${r.stock_actual}` : ''}
+                      </div>
+                    </div>
+                    <ChevronRight size={14} style={{ color: '#6b6b8d', flexShrink: 0 }} />
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </div>
 

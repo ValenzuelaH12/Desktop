@@ -157,13 +157,32 @@ export default function Configuracion() {
   const handleAddUser = async (e) => {
     e.preventDefault()
     setMsg({ type: '', text: '' })
+
+    // Validaciones
+    if (newUser.nombre.trim().length < 2) {
+      setMsg({ type: 'error', text: 'El nombre debe tener al menos 2 caracteres.' })
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.email)) {
+      setMsg({ type: 'error', text: 'Introduce un email válido.' })
+      return
+    }
+    if (newUser.password.length < 6) {
+      setMsg({ type: 'error', text: 'La contraseña debe tener al menos 6 caracteres.' })
+      return
+    }
+    if (!newUser.permisos || newUser.permisos.length === 0) {
+      setMsg({ type: 'error', text: 'Debes asignar al menos un permiso al usuario.' })
+      return
+    }
+
     try {
       const { error: authError } = await supabase.auth.signUp({
         email: newUser.email,
         password: newUser.password,
         options: {
           data: {
-            nombre: newUser.nombre,
+            nombre: newUser.nombre.trim(),
             rol: newUser.rol,
             hotel: newUser.hotel,
             permisos: newUser.permisos
@@ -173,6 +192,7 @@ export default function Configuracion() {
       if (authError) throw authError
       setMsg({ type: 'success', text: 'Usuario creado exitosamente.' })
       setIsAddingUser(false)
+      setNewUser({ email: '', password: '', nombre: '', rol: 'recepcion', hotel: profile?.hotel || 'Hotel Central', permisos: ['dashboard', 'incidencias', 'chat'] })
       fetchUsers()
     } catch (error) { setMsg({ type: 'error', text: error.message }) }
   }

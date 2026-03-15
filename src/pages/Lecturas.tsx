@@ -13,6 +13,9 @@ export default function Lecturas() {
   const [isAdding, setIsAdding] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [msg, setMsg] = useState({ type: '', text: '' })
+  const [filterType, setFilterType] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [newReading, setNewReading] = useState({
     contador_id: '',
     valor: '',
@@ -240,6 +243,40 @@ export default function Lecturas() {
         })}
       </div>
 
+      {/* Barra de filtros */}
+      <div className="glass-card mb-lg px-lg py-md flex items-center gap-md flex-wrap">
+        <div className="flex items-center gap-sm">
+          <span className="text-xs text-muted font-bold uppercase">Tipo:</span>
+          {(['all', 'agua', 'gas', 'luz'] as const).map(t => (
+            <button key={t} 
+              className={`btn btn-sm ${filterType === t ? (t === 'all' ? 'btn-primary' : '') : 'btn-ghost'}`}
+              onClick={() => setFilterType(t)}
+              style={filterType === t && t !== 'all' ? {
+                background: t === 'agua' ? 'rgba(6,182,212,0.2)' : t === 'gas' ? 'rgba(245,158,11,0.2)' : 'rgba(99,102,241,0.2)',
+                borderColor: t === 'agua' ? '#06b6d4' : t === 'gas' ? '#f59e0b' : '#6366f1',
+                color: t === 'agua' ? '#2dd4bf' : t === 'gas' ? '#fbbf24' : '#a5b4fc',
+                border: '1px solid'
+              } : {}}
+            >
+              {t === 'all' ? 'Todos' : t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-sm ml-auto">
+          <span className="text-xs text-muted font-bold uppercase">Desde:</span>
+          <input type="date" className="input" style={{ width: '150px', padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
+            value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+          <span className="text-xs text-muted font-bold uppercase">Hasta:</span>
+          <input type="date" className="input" style={{ width: '150px', padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
+            value={dateTo} onChange={e => setDateTo(e.target.value)} />
+          {(dateFrom || dateTo || filterType !== 'all') && (
+            <button className="btn btn-ghost btn-sm text-danger" onClick={() => { setDateFrom(''); setDateTo(''); setFilterType('all'); }}>
+              <X size={14} /> Limpiar
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="glass-card table-panel">
         <div className="panel-header border-b flex justify-between items-center px-lg py-md">
           <div className="flex items-center gap-md">
@@ -295,7 +332,14 @@ export default function Lecturas() {
                 </tr>
               </thead>
               <tbody>
-                {lecturas.length > 0 ? lecturas.map(l => (
+                {(() => {
+                  const filtered = lecturas.filter(l => {
+                    if (filterType !== 'all' && l.tipo !== filterType) return false
+                    if (dateFrom && l.fecha < dateFrom) return false
+                    if (dateTo && l.fecha > dateTo) return false
+                    return true
+                  })
+                  return filtered.length > 0 ? filtered.map(l => (
                   <tr key={l.id}>
                     <td><strong>{new Date(l.fecha).toLocaleDateString()}</strong></td>
                     <td><span className="font-bold">{l.contadores?.nombre || '---'}</span></td>
@@ -320,9 +364,10 @@ export default function Lecturas() {
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan="5" className="text-center p-xl text-muted">No hay lecturas registradas aún.</td>
+                    <td colSpan={6} className="text-center p-xl text-muted">No hay lecturas para los filtros seleccionados.</td>
                   </tr>
-                )}
+                )
+                })()}
               </tbody>
             </table>
           )}
