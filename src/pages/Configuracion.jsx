@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { 
   Users, UserPlus, Shield, Hotel, Plus, X, RefreshCw, Trash2, MessageSquare, Activity, ClipboardList,
-  LayoutDashboard, AlertTriangle, Calendar, Settings, Check
+  LayoutDashboard, AlertTriangle, Calendar, Settings, Check, Package
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -12,6 +12,7 @@ const AVAILABLE_MODULES = [
   { id: 'lecturas', name: 'Lecturas', icon: Activity, desc: 'Control de suministros' },
   { id: 'chat', name: 'Chat', icon: MessageSquare, desc: 'Comunicación interna' },
   { id: 'planificacion', name: 'Planificación', icon: Calendar, desc: 'Mantenimiento preventivo' },
+  { id: 'inventario', name: 'Inventario', icon: Package, desc: 'Control de stock y suministros' },
   { id: 'configuracion', name: 'Configuración', icon: Settings, desc: 'Ajustes del sistema' }
 ]
 

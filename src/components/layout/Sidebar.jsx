@@ -9,7 +9,8 @@ import {
   LogOut,
   Hotel,
   Activity,
-  Calendar
+  Calendar,
+  Package
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
@@ -23,6 +24,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
   const navItems = [
     { id: 'dashboard', name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { id: 'incidencias', name: 'Incidencias', path: '/incidencias', icon: AlertTriangle },
+    { id: 'inventario', name: 'Inventario', path: '/inventario', icon: Package },
     { id: 'lecturas', name: 'Lecturas', path: '/lecturas', icon: Activity },
     { id: 'chat', name: 'Chat', path: '/chat', icon: MessageSquare },
     { id: 'planificacion', name: 'Planificación', path: '/planificacion', icon: Calendar },

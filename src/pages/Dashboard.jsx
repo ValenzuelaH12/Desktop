@@ -13,6 +13,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -21,6 +22,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [reportData, setReportData] = useState(null)
+  const [myTasks, setMyTasks] = useState([])
+  const [readingTrends, setReadingTrends] = useState([])
+  const { user } = useAuth()
 
   useEffect(() => {
     fetchDashboardData()
@@ -71,6 +75,24 @@ export default function Dashboard() {
         .limit(5)
       
       setRecentIncidents(incidents || [])
+
+      // 5. Mis tareas pendientes
+      const { data: myIncs } = await supabase
+        .from('incidencias')
+        .select('*')
+        .eq('assigned_to', user?.id)
+        .neq('status', 'resuelto')
+        .limit(5)
+      setMyTasks(myIncs || [])
+
+      // 6. Tendencias de lecturas (últimas 7 del contador principal de luz)
+      const { data: readings } = await supabase
+        .from('lecturas')
+        .select('valor, fecha, consumo')
+        .eq('tipo', 'luz')
+        .order('fecha', { ascending: false })
+        .limit(7)
+      setReadingTrends((readings || []).reverse())
 
     } catch (error) {
       console.error('Error fetching dashboard stats:', error)
@@ -173,11 +195,54 @@ export default function Dashboard() {
 
         <div className="glass-card panel">
           <div className="panel-header border-b">
-            <h3>Actividad de Departamentos</h3>
+            <h3>Mis Tareas Pendientes</h3>
+            <span className="badge badge-accent">{myTasks.length}</span>
           </div>
-          <div className="panel-body align-center empty-state">
-             <Activity className="text-muted" size={48} />
-             <p>Los gráficos se cargarán cuando haya suficientes datos históricos.</p>
+          <div className="panel-body">
+            {myTasks.length > 0 ? (
+              <ul className="incident-list">
+                {myTasks.map(task => (
+                  <li key={task.id} className="incident-item" onClick={() => navigate('/incidencias')}>
+                    <div className="flex flex-column gap-xs">
+                      <h4 className="incident-title">{task.title}</h4>
+                      <div className="flex items-center gap-sm">
+                        <span className="text-xs text-muted"><Clock size={10} /> {task.location}</span>
+                        <span className={`badge-status ${task.priority}`}>{task.priority.toUpperCase()}</span>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="p-xl text-center text-muted">No tienes tareas asignadas.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="glass-card panel">
+          <div className="panel-header border-b">
+            <h3>Tendencia Consumo (Luz)</h3>
+          </div>
+          <div className="panel-body p-lg h-full">
+            <div className="flex items-end gap-sm h-48 pt-lg">
+              {readingTrends.map((r, idx) => {
+                const maxVal = Math.max(...readingTrends.map(x => x.consumo || 1))
+                const height = r.consumo ? (r.consumo / maxVal) * 100 : 5
+                return (
+                  <div key={idx} className="flex-1 flex flex-column items-center gap-xs h-full justify-end">
+                    <div className="text-[10px] text-muted">{r.consumo?.toFixed(1)}</div>
+                    <div className="w-full bg-accent rounded-t-sm transition-all hover:opacity-80" style={{ height: `${height}%`, minHeight: '4px' }}></div>
+                    <div className="text-[9px] text-muted whitespace-nowrap">{new Date(r.fecha).toLocaleDateString(undefined, {weekday: 'short'})}</div>
+                  </div>
+                )
+              })}
+              {readingTrends.length === 0 && (
+                <div className="w-full h-full flex flex-column items-center justify-center text-muted">
+                  <Activity size={32} className="mb-sm opacity-20" />
+                  <p className="text-xs">Sin datos</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -449,6 +514,10 @@ export default function Dashboard() {
           font-weight: 700;
           letter-spacing: 0.05em;
         }
+
+        .h-48 { height: 12rem; }
+        .gap-xs { gap: var(--spacing-xs); }
+        .rounded-t-sm { border-top-left-radius: 4px; border-top-right-radius: 4px; }
 
         .incident-time {
           font-size: var(--font-size-xs);

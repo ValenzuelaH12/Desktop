@@ -16,6 +16,7 @@ export default function Incidencias() {
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [staff, setStaff] = useState([])
 
   useEffect(() => {
     fetchIncidents()
@@ -40,14 +41,16 @@ export default function Incidencias() {
 
   const fetchMetadata = async () => {
     try {
-      const [zRes, tRes, hRes] = await Promise.all([
+      const [zRes, tRes, hRes, sRes] = await Promise.all([
         supabase.from('zonas').select('id, nombre'),
         supabase.from('tipos_problemas').select('nombre'),
-        supabase.from('habitaciones').select('id, nombre, zona_id')
+        supabase.from('habitaciones').select('id, nombre, zona_id'),
+        supabase.from('perfiles').select('id, nombre, rol').in('rol', ['mantenimiento', 'limpieza', 'admin', 'direccion'])
       ])
       if (zRes.data) setZonas(zRes.data)
       if (tRes.data) setTipos(tRes.data)
       if (hRes.data) setHabitaciones(hRes.data)
+      if (sRes.data) setStaff(sRes.data)
     } catch (error) { console.error(error) }
   }
 
@@ -57,7 +60,8 @@ export default function Incidencias() {
         .from('incidencias')
         .select(`
           *,
-          reporter:perfiles!reporter_id(nombre, rol)
+          reporter:perfiles!reporter_id(nombre, rol),
+          assignee:perfiles!assigned_to(nombre)
         `)
         .order('created_at', { ascending: false })
       
@@ -72,7 +76,9 @@ export default function Incidencias() {
         descripcion: inc.descripcion,
         media_urls: inc.media_urls || [],
         time: new Date(inc.created_at).toLocaleDateString(),
-        reporter: `${inc.reporter?.nombre || 'Desconocido'} (${inc.reporter?.rol || ''})`
+        reporter: `${inc.reporter?.nombre || 'Desconocido'} (${inc.reporter?.rol || ''})`,
+        assignee_id: inc.assigned_to,
+        assignee_name: inc.assignee?.nombre || 'Sin asignar'
       }))
       
       setIncidents(formattedData)
@@ -174,6 +180,24 @@ export default function Incidencias() {
       }
     } catch (error) {
       console.error('Error updating status:', error)
+    }
+  }
+
+  const handleAssign = async (incidentId, userId) => {
+    try {
+      const { error } = await supabase
+        .from('incidencias')
+        .update({ assigned_to: userId })
+        .eq('id', incidentId)
+      
+      if (error) throw error
+      fetchIncidents()
+      if (selectedIncident?.id === incidentId) {
+        const selectedStaff = staff.find(s => s.id === userId)
+        setSelectedIncident(prev => ({ ...prev, assignee_id: userId, assignee_name: selectedStaff?.nombre || 'Sin asignar' }))
+      }
+    } catch (error) {
+      console.error('Error assigning incident:', error)
     }
   }
 
@@ -329,7 +353,10 @@ export default function Incidencias() {
                 <div className="avatar avatar-sm avatar-gradient">
                   {inc.reporter.charAt(0)}
                 </div>
-                <span className="text-xs text-muted truncate max-w-[100px]">{inc.reporter}</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-muted truncate max-w-[80px]">{inc.reporter.split(' ')[0]}</span>
+                  <span className="text-[9px] text-accent font-bold truncate max-w-[80px]">→ {inc.assignee_name}</span>
+                </div>
               </div>
               
               <div className={`status-pill status-${STATUS_DETAILS[inc.status]?.color || 'secondary'}`}>
@@ -506,8 +533,21 @@ export default function Incidencias() {
                     </div>
                   </div>
                 </div>
+                <div className="input-group mt-lg">
+                  <label className="input-label mb-md text-xs uppercase tracking-widest text-muted">Asignar Responsable</label>
+                  <select 
+                    className="select"
+                    value={selectedIncident.assignee_id || ''}
+                    onChange={(e) => handleAssign(selectedIncident.id, e.target.value)}
+                  >
+                    <option value="">Sin asignar</option>
+                    {staff.map(member => (
+                      <option key={member.id} value={member.id}>{member.nombre} ({member.rol})</option>
+                    ))}
+                  </select>
+                </div>
 
-                <div className="input-group">
+                <div className="input-group mt-lg">
                   <label className="input-label mb-md text-xs uppercase tracking-widest text-muted">Cambiar Estado</label>
                   <div className="status-selector-grid">
                     {Object.entries(STATUS_DETAILS).map(([key, details]) => (
