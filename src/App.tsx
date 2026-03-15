@@ -20,7 +20,7 @@ const ProtectedRoute = ({ children }) => {
     return (
       <div className="loading-screen">
         <div className="loading-spinner"></div>
-        <p>Cargando HotelOps Pro...</p>
+        <p>Cargando V-Suite...</p>
       </div>
     )
   }
