@@ -513,80 +513,84 @@ export default function Incidencias() {
             </div>
             <form onSubmit={handleCreateIncident}>
               <div className="modal-body">
-                <div className="input-group mb-md">
-                  <label className="input-label">Tipo de Incidencia</label>
-                  <select 
-                    className="select"
-                    value={newIncident.title}
-                    onChange={e => setNewIncident({...newIncident, title: e.target.value})}
-                    required
-                  >
-                    <option value="">Seleccionar tipo...</option>
-                    {tipos.map(t => (
-                      <option key={t.nombre} value={t.nombre}>{t.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="input-group mb-md">
-                  <label className="input-label">Zona / Ubicación</label>
-                  <select 
-                    className="select"
-                    value={newIncident.location}
-                    onChange={e => setNewIncident({...newIncident, location: e.target.value, room: ''})}
-                    required
-                  >
-                    <option value="">Seleccionar zona...</option>
-                    {zonas.map(z => (
-                      <option key={z.id} value={z.nombre}>{z.nombre}</option>
-                    ))}
-                  </select>
+                <div className="grid-2 gap-md mb-md">
+                  <div className="input-group">
+                    <label className="input-label">Tipo de Incidencia</label>
+                    <select 
+                      className="select"
+                      value={newIncident.title}
+                      onChange={e => setNewIncident({...newIncident, title: e.target.value})}
+                      required
+                    >
+                      <option value="">Seleccionar tipo...</option>
+                      {tipos.map(t => (
+                        <option key={t.nombre} value={t.nombre}>{t.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Prioridad</label>
+                    <select 
+                      className="select"
+                      value={newIncident.priority}
+                      onChange={e => setNewIncident({...newIncident, priority: e.target.value})}
+                    >
+                      <option value="low">Baja</option>
+                      <option value="medium">Media</option>
+                      <option value="high">Alta</option>
+                    </select>
+                  </div>
                 </div>
 
-                {newIncident.location && zonas.find(z => z.nombre === newIncident.location) && (
-                  <div className="input-group mb-md animate-fade-in">
+                <div className="grid-2 gap-md mb-md">
+                  <div className="input-group">
+                    <label className="input-label">Zona / Ubicación</label>
+                    <select 
+                      className="select"
+                      value={newIncident.location}
+                      onChange={e => setNewIncident({...newIncident, location: e.target.value, room: ''})}
+                      required
+                    >
+                      <option value="">Seleccionar zona...</option>
+                      {zonas.map(z => (
+                        <option key={z.id} value={z.nombre}>{z.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="input-group">
                     <label className="input-label">Habitación (Opcional)</label>
                     <select 
                       className="select"
                       value={newIncident.room || ''}
                       onChange={e => setNewIncident({...newIncident, room: e.target.value})}
+                      disabled={!newIncident.location}
                     >
-                      <option value="">Cualquier ubicación en {newIncident.location}</option>
-                      {habitaciones
+                      <option value="">{newIncident.location ? `Cualquier hab. en ${newIncident.location}` : 'Seleccione zona primero'}</option>
+                      {newIncident.location && habitaciones
                         .filter(h => h.zona_id === zonas.find(z => z.nombre === newIncident.location)?.id)
                         .map(h => (
                           <option key={h.id} value={h.nombre}>{h.nombre}</option>
                         ))}
                     </select>
                   </div>
-                )}
-                <div className="input-group">
-                  <label className="input-label">Prioridad</label>
-                  <select 
-                    className="select"
-                    value={newIncident.priority}
-                    onChange={e => setNewIncident({...newIncident, priority: e.target.value})}
-                  >
-                    <option value="low">Baja</option>
-                    <option value="medium">Media</option>
-                    <option value="high">Alta</option>
-                  </select>
                 </div>
-                <div className="input-group mt-md">
+
+                <div className="input-group mb-md">
                   <label className="input-label">Descripción del Problema</label>
                   <textarea 
                     className="input"
-                    rows="3"
+                    rows={2} /* Reducido de 3 a 2 */
                     placeholder="Detalla qué sucede..."
                     value={newIncident.descripcion || ''}
                     onChange={e => setNewIncident({...newIncident, descripcion: e.target.value})}
                   />
                 </div>
 
-                <div className="input-group mt-md">
+                <div className="input-group">
                   <label className="input-label mb-sm">Archivos Adjuntos</label>
-                  <div className="flex flex-wrap gap-sm">
+                  <div className="flex flex-wrap gap-xs">
                     {newIncident.media_urls?.map((url, i) => (
-                      <div key={i} className="media-thumb glass rounded-md overflow-hidden border border-white/10 w-16 h-16 relative group">
+                      <div key={i} className="media-thumb glass rounded-md overflow-hidden border border-white/10 w-12 h-12 relative group">
                         <img src={url} alt="" className="object-cover w-full h-full" />
                         <button 
                           className="absolute top-0 right-0 bg-danger text-white p-xs opacity-0 group-hover:opacity-100 transition-opacity"
@@ -595,15 +599,15 @@ export default function Incidencias() {
                             media_urls: prev.media_urls.filter((_, idx) => idx !== i)
                           }))}
                         >
-                          <X size={10} />
+                          <X size={8} />
                         </button>
                       </div>
                     ))}
-                    <label className="upload-box glass hover:border-accent transition-all rounded-md border-2 border-dashed border-white/10 w-16 h-16 flex items-center justify-center cursor-pointer">
+                    <label className="upload-box glass hover:border-accent transition-all rounded-md border-2 border-dashed border-white/10 w-12 h-12 flex items-center justify-center cursor-pointer">
                       {uploading ? (
-                        <RefreshCw className="animate-spin text-accent" size={16} />
+                        <RefreshCw className="animate-spin text-accent" size={14} />
                       ) : (
-                        <Plus size={16} className="text-muted" />
+                        <Plus size={14} className="text-muted" />
                       )}
                       <input type="file" hidden accept="image/*,video/*" onChange={handleModalFileUpload} disabled={uploading} />
                     </label>
