@@ -549,10 +549,11 @@ input, textarea, select {
   height: 100%;
   background: rgba(0, 0, 0, 0.85); /* Más oscuro para mejor contraste */
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* Cambiado a flex-start para controlar la altura exacta */
   justify-content: center;
   z-index: 99999;
-  padding: 20px;
+  padding: 18vh 20px 20px 20px; /* Forzado a bajar un 18% de la pantalla */
+  overflow-y: auto; /* Permite scroll si el modal es muy alto */
 }
 
 .modal-content {
