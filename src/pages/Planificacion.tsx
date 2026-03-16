@@ -177,9 +177,9 @@ export default function Planificacion() {
 
   const fetchTasks = async () => {
     try {
-      const cached = localStorage.getItem('v-suite-tasks')
-      if (cached && loading) {
-        setTasks(JSON.parse(cached))
+      const cached = await dbService.getAll('mantenimiento')
+      if (cached && cached.length > 0 && loading) {
+        setTasks(cached)
       }
 
       const { data, error } = await supabase
@@ -188,7 +188,7 @@ export default function Planificacion() {
         .order('proxima_fecha', { ascending: true })
       if (error) throw error
       setTasks(data || [])
-      localStorage.setItem('v-suite-tasks', JSON.stringify(data || []))
+      await dbService.putBatch('mantenimiento', data || [])
     } catch (error) {
       console.error('Error fetching maintenance:', error)
     }

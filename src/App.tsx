@@ -94,6 +94,7 @@ function AppRoutes() {
 }
 
 import { ToastProvider } from './components/Toast'
+import { SyncManager } from './components/SyncManager'
 
 function App() {
   return (
@@ -101,6 +102,7 @@ function App() {
       <AuthProvider>
         <NotificationProvider>
           <ToastProvider>
+            <SyncManager />
             <AppRoutes />
           </ToastProvider>
         </NotificationProvider>

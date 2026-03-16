@@ -4,6 +4,7 @@ import { Plus, Filter, Search, MoreVertical, MapPin, Clock, X, CheckCircle, Imag
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
+import { dbService } from '../lib/db'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -63,10 +64,10 @@ export default function Incidencias() {
 
   const fetchIncidents = async () => {
     try {
-      // Cargar desde caché offline primero para rapidez
-      const cached = localStorage.getItem('v-suite-incidents')
-      if (cached && loading) {
-        setIncidents(JSON.parse(cached))
+      // Cargar desde IndexedDB (caché offline avanzada)
+      const cached = await dbService.getAll('incidencias')
+      if (cached && cached.length > 0 && loading) {
+        setIncidents(cached)
       }
 
       const { data, error } = await supabase
@@ -99,7 +100,7 @@ export default function Incidencias() {
       }))
       
       setIncidents(formattedData)
-      localStorage.setItem('v-suite-incidents', JSON.stringify(formattedData))
+      await dbService.putBatch('incidencias', formattedData)
     } catch (error) {
       console.error('Error fetching incidents:', error)
     } finally {
@@ -143,13 +144,36 @@ export default function Incidencias() {
         }])
       }
 
+      toast.success('Incidencia reportada correctamente')
       fetchIncidents()
       setIsModalOpen(false)
       setNewIncident({ title: '', location: '', priority: 'medium', room: '', descripcion: '', media_urls: [] })
-      toast.success('Incidencia reportada y canal de chat creado.')
     } catch (error: any) {
       console.error('Error creating incident:', error)
-      toast.error('Error al crear incidencia: ' + error.message)
+      
+      // Soporte Offline: Cola de sincronización
+      try {
+        await dbService.addToSyncQueue({
+          table: 'incidencias',
+          action: 'insert',
+          data: {
+            title: newIncident.title,
+            location: finalLocation,
+            priority: newIncident.priority,
+            status: 'pendiente',
+            descripcion: newIncident.descripcion || '',
+            media_urls: newIncident.media_urls || [],
+            reporter_id: user.id,
+            created_at: new Date().toISOString()
+          },
+          timestamp: Date.now()
+        })
+        toast.info('Modo Offline: El reporte se sincronizará al recuperar la conexión.')
+        setIsModalOpen(false)
+        setNewIncident({ title: '', location: '', priority: 'medium', room: '', descripcion: '', media_urls: [] })
+      } catch (dbError) {
+        toast.error('Error crítico al guardar datos locales.')
+      }
     }
   }
 
