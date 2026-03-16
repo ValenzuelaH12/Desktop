@@ -216,7 +216,13 @@ export default function Chat() {
 
   // --- NOTAS DE VOZ ---
   const startRecording = async () => {
+    if (!window.MediaRecorder) {
+      toast.error('Tu navegador no soporta grabación de audio')
+      return
+    }
+
     try {
+      console.log('Solicitando micrófono...')
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const recorder = new MediaRecorder(stream)
       const chunks: Blob[] = []
@@ -251,8 +257,10 @@ export default function Chat() {
       recorder.start()
       setMediaRecorder(recorder)
       setIsRecording(true)
-    } catch (error) {
-      toast.error('No se pudo acceder al micrófono')
+      console.log('Grabación iniciada')
+    } catch (error: any) {
+      console.error('Error al acceder al micrófono:', error)
+      toast.error('No se pudo acceder al micrófono. Verifica los permisos.')
     }
   }
 
