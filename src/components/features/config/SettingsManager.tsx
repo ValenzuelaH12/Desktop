@@ -5,6 +5,7 @@ import { Button } from '../../ui/Button';
 import { settingsService } from '../../../services/settingsService';
 import { GlobalSettings, ActivityLogEvent } from '../../../types';
 import { useAuth } from '../../../context/AuthContext';
+import { configService } from '../../../services/configService';
 
 interface SettingsManagerProps {
   onMessage: (msg: { type: 'success' | 'error', text: string }) => void;
@@ -20,9 +21,27 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onMessage }) =
     currency: 'EUR',
     timezone: 'Europe/Madrid',
     logo_url: null,
-    welcome_message: ''
+    welcome_message: '',
+    notification_rules: {}
   });
   const [logs, setLogs] = useState<ActivityLogEvent[]>([]);
+  const [zones, setZones] = useState<{id: string, nombre: string}[]>([]);
+
+  const ROLES = [
+    { id: 'admin', name: 'Administrador' },
+    { id: 'direccion', name: 'Dirección' },
+    { id: 'mantenimiento', name: 'Mantenimiento' },
+    { id: 'recepcion', name: 'Recepción' },
+    { id: 'limpieza', name: 'Limpieza' },
+    { id: 'gobernanta', name: 'Gobernanta' }
+  ];
+
+  const PRIORITIES = [
+    { id: 'low', name: 'Baja' },
+    { id: 'medium', name: 'Media' },
+    { id: 'high', name: 'Alta' },
+    { id: 'urgent', name: 'Urgente' }
+  ];
 
   useEffect(() => {
     fetchSettings();
@@ -37,8 +56,18 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onMessage }) =
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const data = await settingsService.getSettings();
-      if (data) setSettings(data);
+      const [data, zonesData] = await Promise.all([
+        settingsService.getSettings(),
+        configService.getZones()
+      ]);
+      
+      if (data) {
+        setSettings({
+          ...data,
+          notification_rules: data.notification_rules || {}
+        });
+      }
+      setZones(zonesData || []);
     } catch (error) {
       console.error(error);
       onMessage({ type: 'error', text: 'Error al cargar los ajustes globales.' });
@@ -208,11 +237,129 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onMessage }) =
         )}
 
         {activeTab === 'notificaciones' && (
-          <div className="animate-fade-in text-center p-xl">
-            <Bell size={48} className="text-accent mx-auto mb-md opacity-50" />
-            <h3 className="text-xl font-bold mb-2">Reglas de Notificaciones</h3>
-            <p className="text-muted">Las notificaciones push están activadas para todos los roles relevantes. Próximamente podrás filtrar qué departamentos reciben qué tipo de avisos por zona.</p>
-          </div>
+          <form onSubmit={handleSave} className="animate-fade-in flex flex-col gap-lg">
+            <div className="flex items-center justify-between mb-md">
+              <h3 className="text-xl font-bold">Reglas de Notificaciones por Rol</h3>
+              <Button type="submit" icon={Save} loading={saving}>Guardar Reglas</Button>
+            </div>
+            
+            <p className="text-muted text-sm mb-lg">
+              Configura qué roles reciben notificaciones según la zona o la urgencia de la incidencia.
+            </p>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-lg">
+              {ROLES.map(role => {
+                const rule = settings.notification_rules?.[role.id] || { enabled: true, zones: ['all'], priorities: ['all'] };
+                
+                return (
+                  <div key={role.id} className="bg-white/5 rounded-xl p-md border border-white/10 flex flex-col gap-md">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-sm">
+                      <div className="flex items-center gap-sm">
+                        <div className={`w-3 h-3 rounded-full ${rule.enabled ? 'bg-success' : 'bg-muted'}`} />
+                        <h4 className="font-bold text-lg">{role.name}</h4>
+                      </div>
+                      <label className="flex items-center cursor-pointer">
+                        <div className="relative">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only" 
+                            checked={rule.enabled}
+                            onChange={(e) => {
+                              const newRules = { ...settings.notification_rules };
+                              newRules[role.id] = { ...rule, enabled: e.target.checked };
+                              setSettings({ ...settings, notification_rules: newRules });
+                            }}
+                          />
+                          <div className={`block w-10 h-6 rounded-full transition-colors ${rule.enabled ? 'bg-success' : 'bg-white/10'}`}></div>
+                          <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${rule.enabled ? 'transform translate-x-4' : ''}`}></div>
+                        </div>
+                      </label>
+                    </div>
+
+                    {rule.enabled && (
+                      <div className="flex flex-col gap-sm">
+                        <div className="input-group">
+                          <label className="text-xs text-muted font-medium mb-1">Prioridades a Notificar</label>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newRules = { ...settings.notification_rules };
+                                newRules[role.id] = { ...rule, priorities: ['all'] };
+                                setSettings({ ...settings, notification_rules: newRules });
+                              }}
+                              className={`px-3 py-1 text-xs rounded-full border transition-colors ${rule.priorities.includes('all') ? 'bg-accent/20 border-accent text-accent' : 'bg-white/5 border-white/10 text-muted hover:border-white/30'}`}
+                            >
+                              Todas
+                            </button>
+                            {PRIORITIES.map(p => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                disabled={rule.priorities.includes('all')}
+                                onClick={() => {
+                                  const newRules = { ...settings.notification_rules };
+                                  const newPrios = rule.priorities.includes(p.id) 
+                                    ? rule.priorities.filter(x => x !== p.id)
+                                    : [...rule.priorities.filter(x => x !== 'all'), p.id];
+                                  
+                                  newRules[role.id] = { ...rule, priorities: newPrios.length === 0 ? ['all'] : newPrios };
+                                  setSettings({ ...settings, notification_rules: newRules });
+                                }}
+                                className={`px-3 py-1 text-xs rounded-full border transition-colors ${rule.priorities.includes('all') ? 'opacity-50 cursor-not-allowed bg-white/5 border-transparent' : rule.priorities.includes(p.id) ? 'bg-white/20 border-white/40 text-white' : 'bg-white/5 border-white/10 text-muted hover:border-white/30'}`}
+                              >
+                                {p.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="input-group">
+                          <label className="text-xs text-muted font-medium mb-1">Zonas Asignadas</label>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newRules = { ...settings.notification_rules };
+                                newRules[role.id] = { ...rule, zones: ['all'] };
+                                setSettings({ ...settings, notification_rules: newRules });
+                              }}
+                              className={`px-3 py-1 text-xs rounded-full border transition-colors ${rule.zones.includes('all') ? 'bg-accent/20 border-accent text-accent' : 'bg-white/5 border-white/10 text-muted hover:border-white/30'}`}
+                            >
+                              Todas
+                            </button>
+                            {zones.map(z => (
+                              <button
+                                key={z.id}
+                                type="button"
+                                disabled={rule.zones.includes('all')}
+                                onClick={() => {
+                                  const newRules = { ...settings.notification_rules };
+                                  const newZones = rule.zones.includes(z.id) 
+                                    ? rule.zones.filter(x => x !== z.id)
+                                    : [...rule.zones.filter(x => x !== 'all'), z.id];
+                                  
+                                  newRules[role.id] = { ...rule, zones: newZones.length === 0 ? ['all'] : newZones };
+                                  setSettings({ ...settings, notification_rules: newRules });
+                                }}
+                                className={`px-3 py-1 text-xs rounded-full border transition-colors ${rule.zones.includes('all') ? 'opacity-50 cursor-not-allowed bg-white/5 border-transparent' : rule.zones.includes(z.id) ? 'bg-white/20 border-white/40 text-white' : 'bg-white/5 border-white/10 text-muted hover:border-white/30'}`}
+                              >
+                                {z.nombre}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="flex justify-end mt-md">
+              <Button type="submit" icon={Save} loading={saving}>Guardar Reglas</Button>
+            </div>
+          </form>
         )}
 
         {activeTab === 'auditoria' && (

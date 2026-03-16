@@ -89,10 +89,17 @@ export interface ActivityLogEvent {
   };
 }
 
+export interface NotificationRule {
+  enabled: boolean;
+  zones: string[]; // 'all' or list of zone IDs
+  priorities: string[]; // 'all' or list of priorities ('low', 'medium', 'high', 'urgent')
+}
+
 export interface GlobalSettings {
   hotel_name: string;
   currency: string;
   timezone: string;
   logo_url?: string | null;
   welcome_message: string;
+  notification_rules?: Record<string, NotificationRule>;
 }
