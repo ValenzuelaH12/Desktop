@@ -278,7 +278,6 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     if (newTemplateItem.trim()) {
-                      setNewTemplate.items.push(newTemplateItem.trim());
                       setNewTemplate({...newTemplate, items: [...newTemplate.items, newTemplateItem.trim()]});
                       setNewTemplateItem('');
                     }
