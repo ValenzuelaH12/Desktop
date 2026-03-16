@@ -12,6 +12,7 @@ import Lecturas from './pages/Lecturas'
 import Planificacion from './pages/Planificacion'
 import Inventory from './pages/Inventory'
 import GuestPortal from './pages/GuestPortal'
+import AssetDetail from './pages/AssetDetail'
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }) => {
@@ -88,6 +89,7 @@ function AppRoutes() {
         <Route path="lecturas" element={<PermissionRoute moduleId="lecturas"><Lecturas /></PermissionRoute>} />
         <Route path="planificacion" element={<PermissionRoute moduleId="planificacion"><Planificacion /></PermissionRoute>} />
         <Route path="inventario" element={<PermissionRoute moduleId="inventario"><Inventory /></PermissionRoute>} />
+        <Route path="asset/:id" element={<AssetDetail />} />
         {/* Futuras rutas:
         <Route path="incidencias/:id" element={<IncidenciaDetalle />} />
         */}

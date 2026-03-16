@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { 
   Users, UserPlus, Shield, Hotel, Plus, X, RefreshCw, Trash2, MessageSquare, Activity, ClipboardList,
-  LayoutDashboard, AlertTriangle, Calendar, Settings, Check, Package, QrCode, Smartphone
+  LayoutDashboard, AlertTriangle, Calendar, Settings, Check, Package, QrCode, Smartphone, Wrench
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -27,6 +27,7 @@ export default function Configuracion() {
   const [tipos, setTipos] = useState([])
   const [mantenimiento, setMantenimiento] = useState([])
   const [elementos, setElementos] = useState([])
+  const [activos, setActivos] = useState([])
   const [loading, setLoading] = useState(true)
   const [isAddingUser, setIsAddingUser] = useState(false)
   const [isEditingUser, setIsEditingUser] = useState(false)
@@ -36,6 +37,7 @@ export default function Configuracion() {
   const [isAddingCanal, setIsAddingCanal] = useState(false)
   const [isAddingContador, setIsAddingContador] = useState(false)
   const [isAddingMantenimiento, setIsAddingMantenimiento] = useState(false)
+  const [isAddingActivo, setIsAddingActivo] = useState(false)
   const [isEditingContador, setIsEditingContador] = useState(false)
   const [isDeleting, setIsDeleting] = useState({ show: false, table: '', id: '', itemName: '' })
   const [selectedZona, setSelectedZona] = useState(null)
@@ -63,6 +65,13 @@ export default function Configuracion() {
     frecuencia: 'mensual',
     proxima_fecha: new Date().toISOString().split('T')[0]
   })
+  const [newActivo, setNewActivo] = useState({
+    nombre: '',
+    tipo: 'maquinaria',
+    zona_id: '',
+    manual_url: '',
+    especificaciones: {}
+  })
 
   useEffect(() => {
     fetchAll()
@@ -79,12 +88,13 @@ export default function Configuracion() {
       fetchCanales(t),
       fetchContadores(t),
       fetchMantenimiento(t),
-      fetchElementos(t)
+      fetchElementos(t),
+      fetchActivos(t)
     ])
     setLoading(false)
   }
 
-  const fetchUsers = async (t) => {
+  const fetchUsers = async (t?: any) => {
     try {
       const { data, error } = await supabase.from('perfiles').select('*').neq('id', '00000000-0000-0000-0000-000000000000').order('nombre')
       if (error) throw error
@@ -92,7 +102,7 @@ export default function Configuracion() {
     } catch (error) { console.error(error) }
   }
 
-  const fetchZonas = async () => {
+  const fetchZonas = async (t?: any) => {
     try {
       const { data, error } = await supabase.from('zonas').select('*').order('nombre')
       if (error) throw error
@@ -100,7 +110,7 @@ export default function Configuracion() {
     } catch (error) { console.error(error) }
   }
 
-  const fetchCanales = async () => {
+  const fetchCanales = async (t?: any) => {
     try {
       const { data, error } = await supabase.from('canales').select('*').order('created_at')
       if (error) throw error
@@ -108,7 +118,7 @@ export default function Configuracion() {
     } catch (error) { console.error(error) }
   }
 
-  const fetchContadores = async () => {
+  const fetchContadores = async (t?: any) => {
     try {
       // Usar un filtro inútil pero dinámico para saltar caché de Chrome
       const { data, error } = await supabase
@@ -122,7 +132,7 @@ export default function Configuracion() {
     } catch (error) { console.error(error) }
   }
 
-  const fetchMantenimiento = async () => {
+  const fetchMantenimiento = async (t?: any) => {
     try {
       const { data, error } = await supabase.from('mantenimiento_preventivo').select('*').order('frecuencia')
       if (error) throw error
@@ -130,7 +140,7 @@ export default function Configuracion() {
     } catch (error) { console.error(error) }
   }
 
-  const fetchElementos = async () => {
+  const fetchElementos = async (t?: any) => {
     try {
       const { data, error } = await supabase.from('elementos_mantenimiento').select('*').order('nombre')
       if (error) throw error
@@ -138,7 +148,7 @@ export default function Configuracion() {
     } catch (error) { console.error(error) }
   }
 
-  const fetchTipos = async () => {
+  const fetchTipos = async (t?: any) => {
     try {
       const { data, error } = await supabase.from('tipos_problemas').select('*').order('nombre')
       if (error) throw error
@@ -146,7 +156,15 @@ export default function Configuracion() {
     } catch (error) { console.error(error) }
   }
 
-  const fetchHabitaciones = async () => {
+  const fetchActivos = async () => {
+    try {
+      const { data, error } = await supabase.from('activos').select('*').order('nombre')
+      if (error) throw error
+      setActivos(data)
+    } catch (error) { console.error(error) }
+  }
+
+  const fetchHabitaciones = async (t?: any) => {
     try {
       const { data, error } = await supabase.from('habitaciones').select('*').order('nombre')
       if (error) throw error
@@ -322,6 +340,21 @@ export default function Configuracion() {
     }
   }
 
+  const handleAddActivo = async (e) => {
+    e.preventDefault()
+    setMsg({ type: '', text: '' })
+    try {
+      const { error } = await supabase.from('activos').insert([newActivo])
+      if (error) throw error
+      setMsg({ type: 'success', text: 'Activo registrado correctamente.' })
+      setIsAddingActivo(false)
+      setNewActivo({ nombre: '', tipo: 'maquinaria', zona_id: '', manual_url: '', especificaciones: {} })
+      fetchActivos()
+    } catch (error) {
+      setMsg({ type: 'error', text: `Error al crear activo: ${error.message}` })
+    }
+  }
+
   const handleAddElemento = async (tareaId, nombre) => {
     if (!nombre.trim()) return
     try {
@@ -394,6 +427,7 @@ export default function Configuracion() {
       if (table === 'perfiles') setUsers(prev => prev.filter(u => String(u.id) !== idStr))
       if (table === 'mantenimiento_preventivo') setMantenimiento(prev => prev.filter(m => String(m.id) !== idStr))
       if (table === 'elementos_mantenimiento') setElementos(prev => prev.filter(e => String(e.id) !== idStr))
+      if (table === 'activos') setActivos(prev => prev.filter(a => String(a.id) !== idStr))
 
       setTimeout(fetchAll, 500)
     } catch (error) { 
@@ -417,7 +451,7 @@ export default function Configuracion() {
           <button 
             className="btn btn-secondary" 
             onClick={() => {
-              const tabOrder = ['usuarios', 'zonas', 'tipos', 'canales', 'contadores', 'mantenimiento', 'v-nexus']
+              const tabOrder = ['usuarios', 'zonas', 'tipos', 'canales', 'contadores', 'mantenimiento', 'v-nexus', 'v-qr']
               const currentIndex = tabOrder.indexOf(activeTab)
               const nextIndex = (currentIndex + 1) % tabOrder.length
               setActiveTab(tabOrder[nextIndex])
@@ -471,6 +505,12 @@ export default function Configuracion() {
           onClick={() => setActiveTab('v-nexus')}
         >
           <QrCode size={18} /> V-Nexus (QRs)
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'v-qr' ? 'active' : ''}`}
+          onClick={() => setActiveTab('v-qr')}
+        >
+          <Wrench size={18} /> V-QR (Activos)
         </button>
       </div>
 
@@ -716,8 +756,9 @@ export default function Configuracion() {
                                   placeholder="Añadir elemento (ej. Caldera 1)..."
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
-                                      handleAddElemento(m.id, e.target.value)
-                                      e.target.value = ''
+                                      const input = e.target as HTMLInputElement;
+                                      handleAddElemento(m.id, input.value)
+                                      input.value = ''
                                     }
                                   }}
                                 />
@@ -821,6 +862,81 @@ export default function Configuracion() {
                           No hay habitaciones configuradas aún. Vaya a la pestaña "Zonas" para agregar habitaciones.
                         </td>
                       </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* V-QR Tab Content */}
+        {activeTab === 'v-qr' && (
+          <div className="glass-card table-panel animate-fade-in">
+            <div className="panel-header border-b">
+              <div className="flex items-center gap-md">
+                <Wrench size={20} className="text-accent" />
+                <h3>V-QR: Gestión de Activos y Equipos</h3>
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={() => setIsAddingActivo(true)}>
+                <Plus size={16} /> Nuevo Activo
+              </button>
+            </div>
+            
+            <div className="p-lg border-b bg-accent/5">
+              <p className="text-sm text-muted">
+                Gestione equipos industriales, maquinaria y mobiliario. Genere códigos QR técnicos para que el personal de mantenimiento 
+                pueda acceder instantáneamente al historial de intervenciones y manuales PDF directamente desde sus móviles.
+              </p>
+            </div>
+
+            <div className="panel-body p-none">
+              <div className="table-responsive">
+                <table className="config-table">
+                  <thead>
+                    <tr>
+                      <th>Activo / Equipo</th>
+                      <th>Tipo</th>
+                      <th>Estado</th>
+                      <th className="text-center">QR Técnico</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activos.map(a => {
+                      const portalUrl = `${window.location.origin}/asset/${a.id}`
+                      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(portalUrl)}`
+                      
+                      return (
+                        <tr key={a.id}>
+                          <td>
+                            <div className="flex flex-col">
+                              <strong>{a.nombre}</strong>
+                              <span className="text-xs text-muted">{zonas.find(z => z.id === a.zona_id)?.nombre || 'Ubicación no asignada'}</span>
+                            </div>
+                          </td>
+                          <td><span className="badge badge-secondary">{a.tipo?.toUpperCase()}</span></td>
+                          <td>
+                            <span className={`badge-status ${a.estado === 'operativo' ? 'success' : a.estado === 'averiado' ? 'danger' : 'warning'}`}>
+                              {a.estado?.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            <a href={qrUrl} target="_blank" rel="noreferrer" className="inline-block p-xs bg-white border rounded shadow-sm hover:scale-110 transition-transform">
+                              <img src={qrUrl} alt={`QR ${a.nombre}`} width="48" height="48" />
+                            </a>
+                            <p className="text-[10px] text-accent font-bold mt-xs">Click para ampliar</p>
+                          </td>
+                          <td>
+                            <button className="btn-icon btn-ghost text-danger" onClick={() => handleDelete('activos', a.id, a.nombre)}>
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                    {activos.length === 0 && (
+                      <tr><td colSpan={5} className="text-center py-xl text-muted">No hay activos registrados.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1106,6 +1222,7 @@ export default function Configuracion() {
       )}
 
       {/* MODAL NUEVA HABITACIÓN */}
+      {/* MODAL NUEVA HABITACIÓN */}
       {isAddingHabitacion && (
         <div className="modal-overlay" onClick={() => setIsAddingHabitacion(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -1120,6 +1237,51 @@ export default function Configuracion() {
                 </div>
               </div>
               <div className="modal-footer"><button type="submit" className="btn btn-primary">Añadir Habitación</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL NUEVO ACTIVO */}
+      {isAddingActivo && (
+        <div className="modal-overlay" onClick={() => setIsAddingActivo(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Registrar Nuevo Activo</h2>
+              <button className="btn-icon btn-ghost" onClick={() => setIsAddingActivo(false)}><X size={20} /></button>
+            </div>
+            <form onSubmit={handleAddActivo}>
+              <div className="modal-body">
+                <div className="input-group mb-md">
+                  <label className="input-label">Nombre del Activo / Equipo</label>
+                  <input type="text" className="input" placeholder="Ej. Caldera Central A, Aire Planta 1..." value={newActivo.nombre} onChange={e => setNewActivo({...newActivo, nombre: e.target.value})} required />
+                </div>
+                <div className="grid-2 gap-md mb-md">
+                  <div className="input-group">
+                    <label className="input-label">Tipo de Activo</label>
+                    <select className="select" value={newActivo.tipo} onChange={e => setNewActivo({...newActivo, tipo: e.target.value})}>
+                      <option value="maquinaria">Maquinaria</option>
+                      <option value="climatizacion">Climatización</option>
+                      <option value="fontaneria">Fontanería</option>
+                      <option value="electricidad">Electricidad</option>
+                      <option value="elevacion">Elevación</option>
+                      <option value="otros">Otros</option>
+                    </select>
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Ubicación (Zona)</label>
+                    <select className="select" value={newActivo.zona_id} onChange={e => setNewActivo({...newActivo, zona_id: e.target.value})}>
+                      <option value="">Seleccionar Zona...</option>
+                      {zonas.map(z => <option key={z.id} value={z.id}>{z.nombre}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="input-group">
+                  <label className="input-label">URL del Manual Técnico (PDF/Web)</label>
+                  <input type="url" className="input" placeholder="https://ejemplo.com/manual.pdf" value={newActivo.manual_url} onChange={e => setNewActivo({...newActivo, manual_url: e.target.value})} />
+                </div>
+              </div>
+              <div className="modal-footer"><button type="submit" className="btn btn-primary">Registrar Activo</button></div>
             </form>
           </div>
         </div>
