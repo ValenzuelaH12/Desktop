@@ -589,28 +589,38 @@ input, textarea, select {
 /* Overlay Modal */
 .modal-overlay {
   position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.9);
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85); /* Slightly lighter for better contrast with blur */
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   z-index: 999999;
-  padding: 10px;
-  backdrop-filter: blur(8px);
+  padding: var(--spacing-md);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .modal-content {
   background: #111128 !important;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  width: 95%;
+  border-radius: 16px; /* Slightly more rounded for premium feel */
+  width: 100%;
   max-width: 500px;
-  max-height: 90vh; /* Reduced from 95vh */
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+  max-height: 85vh; /* Safe margin for mobile/small screens */
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  animation: modalIn 0.3s ease-out;
+  animation: modalBounce 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
+  position: relative;
+}
+
+@keyframes modalBounce {
+  from { transform: scale(0.95) translateY(20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 .modal-content form {
@@ -620,9 +630,9 @@ input, textarea, select {
   overflow: hidden;
 }
 
-@keyframes modalIn {
-  from { transform: translateY(10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+@keyframes modalBounce {
+  from { transform: scale(0.95) translateY(20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 .modal-header {

@@ -406,7 +406,7 @@ export default function Incidencias() {
   }
 
   return (
-    <div className="incidencias-page animate-fade-in">
+    <div className="incidencias-page">
       <div className="page-header">
         <div>
           <h1 className="page-title">Gestión de Incidencias</h1>
