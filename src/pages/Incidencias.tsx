@@ -28,6 +28,7 @@ export default function Incidencias() {
   const [uploading, setUploading] = useState(false)
   const [staff, setStaff] = useState([])
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   useEffect(() => {
     fetchIncidents()
@@ -308,8 +309,13 @@ export default function Incidencias() {
     }
   }
 
-  const handleDeleteIncident = async (id) => {
-    if (!confirm('¿Estás seguro de que deseas eliminar esta incidencia? Esta acción no se puede deshacer.')) return
+  const handleDeleteIncident = (id) => {
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!selectedIncident) return
+    const id = selectedIncident.id
     try {
       const { error, count } = await supabase
         .from('incidencias')
@@ -333,6 +339,7 @@ export default function Incidencias() {
 
       setIsDetailPanelOpen(false)
       setSelectedIncident(null)
+      setShowDeleteConfirm(false)
       fetchIncidents()
       toast.success('Incidencia eliminada correctamente.')
     } catch (error) {
@@ -678,6 +685,40 @@ export default function Incidencias() {
                 <button type="submit" className="btn btn-primary">Crear Incidencia</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Eliminación */}
+      {showDeleteConfirm && (
+        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2 className="text-danger flex items-center gap-sm">
+                <Trash2 size={20} /> Confirmar Eliminación
+              </h2>
+            </div>
+            <div className="modal-body py-lg">
+              <p className="text-secondary leading-relaxed">
+                ¿Estás completamente seguro de que deseas eliminar esta incidencia? 
+                <br /><br />
+                <span className="font-bold text-danger">Esta acción no se puede deshacer y borrará permanentemente todo el historial relacionado.</span>
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn btn-secondary flex-1" 
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancelar
+              </button>
+              <button 
+                className="btn btn-primary flex-1 bg-danger border-danger" 
+                onClick={confirmDelete}
+              >
+                Confirmar Borrado
+              </button>
+            </div>
           </div>
         </div>
       )}
