@@ -265,18 +265,19 @@ export default function Chat() {
   }
 
   const getChannelDisplayName = (channel) => {
+    if (!channel || !channel.id) return 'Canal'
     // Detectar DM por prefijo del ID en vez de columna 'type'
     if (channel.id.startsWith('dm_')) {
-      const names = channel.nombre.split(' & ')
-      return names.find(n => n !== profile.nombre) || 'Usuario'
+      const names = channel.nombre?.split(' & ') || []
+      return names.find(n => n !== profile?.nombre) || 'Usuario'
     }
-    return channel.nombre
+    return channel.nombre || 'Sin nombre'
   }
 
   const renderChannelItem = (channel) => {
     const displayName = getChannelDisplayName(channel)
     const firstLetter = displayName?.charAt(0).toUpperCase()
-    const isDM = channel.id.startsWith('dm_')
+    const isDM = channel?.id?.startsWith('dm_')
     
     let avatarClass = 'bg-secondary text-muted'
     if (channel.id === 'general') avatarClass = 'avatar-gradient'
@@ -387,7 +388,7 @@ export default function Chat() {
             <div className="chat-section">
               <h5 className="section-title">Canales de Equipo</h5>
               {channels
-                .filter(c => !c.id.startsWith('dm_'))
+                .filter(c => c?.id && !c.id.startsWith('dm_'))
                 .filter(c => {
                   // Filtrado por rol para canales sensibles
                   if (c.id === 'direccion' && !['direccion', 'admin'].includes(profile?.rol)) return false
@@ -401,7 +402,7 @@ export default function Chat() {
             <div className="chat-section mt-lg">
               <h5 className="section-title">Mensajes Directos</h5>
               {channels
-                .filter(c => c.id.startsWith('dm_'))
+                .filter(c => c?.id && c.id.startsWith('dm_'))
                 .filter(c => getChannelDisplayName(c).toLowerCase().includes(searchQuery.toLowerCase()))
                 .map(channel => renderChannelItem(channel))}
               
@@ -426,10 +427,10 @@ export default function Chat() {
                 activeChannelInfo?.id === 'limpieza' ? 'bg-success-light text-success' : 
                 'bg-secondary text-muted'
               }`}>
-                {getChannelDisplayName(activeChannelInfo || { nombre: 'C' }).charAt(0).toUpperCase()}
+                {getChannelDisplayName(activeChannelInfo).charAt(0).toUpperCase()}
               </div>
               <div>
-                <h2>{activeChannelInfo?.id.startsWith('dm_') ? getChannelDisplayName(activeChannelInfo) : `#${activeChannelInfo?.nombre}`}</h2>
+                <h2>{activeChannelInfo?.id?.startsWith('dm_') ? getChannelDisplayName(activeChannelInfo) : `#${activeChannelInfo?.nombre || 'canal'}`}</h2>
                 <span className="text-sm text-success">● Staff Online</span>
               </div>
             </div>
