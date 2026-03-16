@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClipboardList, Plus, Trash2, Calendar, FileText, CheckCircle } from 'lucide-react';
+import { ClipboardList, Plus, Trash2, Calendar, Activity, CheckCircle } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { configService } from '../../../services/configService';
 import { Card } from '../../ui/Card';
@@ -31,7 +31,7 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
     descripcion: '',
     frecuencia: 'mensual',
     proxima_fecha: new Date().toISOString().split('T')[0],
-    plantillaId: '',
+    plantilla_id: '',
     hotel_id: activeHotelId || ''
   });
 
@@ -57,7 +57,7 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
         descripcion: '', 
         frecuencia: 'mensual', 
         proxima_fecha: new Date().toISOString().split('T')[0], 
-        plantillaId: '',
+        plantilla_id: '',
         hotel_id: activeHotelId || ''
       });
       onRefresh();
@@ -202,7 +202,7 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
                 <div className="mt-xl flex justify-between items-center opacity-40 group-hover:opacity-100 transition-opacity">
                   <div className="flex items-center gap-2 text-xs text-muted font-bold">
                     <CheckCircle size={14} className="text-emerald-400" />
-                    <span>Vinculado a: {templates.find(t => t.id === m.plantillaId)?.nombre || 'Checklist General'}</span>
+                    <span>Vinculado a: {templates.find(t => t.id === m.plantilla_id)?.nombre || 'Checklist General'}</span>
                   </div>
                   <button 
                     onClick={() => configService.delete('mantenimiento_preventivo', m.id).then(onRefresh)}
@@ -278,72 +278,136 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
         isOpen={isAddingMaint}
         onClose={() => setIsAddingMaint(false)}
         title="Programar Mantenimiento"
-        maxWidth="600px"
+        maxWidth="650px"
       >
-        <form onSubmit={handleAddMaint} className="flex flex-col gap-md">
-          <div className="form-group">
-            <label>Título de la Tarea</label>
-            <input 
-              type="text" 
-              required 
-              value={newMaint.titulo}
-              onChange={e => setNewMaint({...newMaint, titulo: e.target.value})}
-              placeholder="Ej: Revisión mensual de Aire Acondicionado"
-            />
+        <form onSubmit={handleAddMaint} className="flex flex-col gap-xl">
+          {/* Section: Basic Info */}
+          <div className="form-section">
+            <div className="flex items-center gap-2 mb-md text-indigo-400">
+              <div className="p-1.5 rounded-lg bg-indigo-500/10">
+                <Calendar size={18} />
+              </div>
+              <h5 className="text-sm font-black uppercase tracking-wider">Información Básica</h5>
+            </div>
+            
+            <div className="form-group">
+              <label className="text-xs font-bold text-muted uppercase tracking-tighter mb-2 block">Título de la Tarea</label>
+              <div className="relative group">
+                <input 
+                  type="text" 
+                  required 
+                  value={newMaint.titulo}
+                  onChange={e => setNewMaint({...newMaint, titulo: e.target.value})}
+                  placeholder="Ej: Revisión mensual de Aire Acondicionado"
+                  className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-indigo-500/50 focus:bg-white/10 transition-all outline-none text-white placeholder:text-white/20"
+                />
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-indigo-400 transition-colors" size={18} />
+              </div>
+            </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-md">
-            <div className="form-group">
-              <label>Frecuencia</label>
-              <select 
-                value={newMaint.frecuencia}
-                onChange={e => setNewMaint({...newMaint, frecuencia: e.target.value})}
-              >
-                <option value="diario">Diario</option>
-                <option value="semanal">Semanal</option>
-                <option value="quincenal">Quincenal</option>
-                <option value="mensual">Mensual</option>
-                <option value="trimestral">Trimestral</option>
-                <option value="anual">Anual</option>
-              </select>
+          {/* Section: Schedule */}
+          <div className="form-section">
+            <div className="flex items-center gap-2 mb-md text-purple-400">
+              <div className="p-1.5 rounded-lg bg-purple-500/10">
+                <Activity size={18} />
+              </div>
+              <h5 className="text-sm font-black uppercase tracking-wider">Programación</h5>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
+              <div className="form-group">
+                <label className="text-xs font-bold text-muted uppercase tracking-tighter mb-2 block">Frecuencia</label>
+                <div className="relative group">
+                  <select 
+                    value={newMaint.frecuencia}
+                    onChange={e => setNewMaint({...newMaint, frecuencia: e.target.value})}
+                    className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-purple-500/50 focus:bg-white/10 transition-all outline-none text-white appearance-none cursor-pointer"
+                  >
+                    <option value="diario">Diario</option>
+                    <option value="semanal">Semanal</option>
+                    <option value="quincenal">Quincenal</option>
+                    <option value="mensual">Mensual</option>
+                    <option value="trimestral">Trimestral</option>
+                    <option value="anual">Anual</option>
+                  </select>
+                  <Activity className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-purple-400 transition-colors pointer-events-none" size={18} />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white/20">
+                    <Plus size={14} className="rotate-45" />
+                  </div>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="text-xs font-bold text-muted uppercase tracking-tighter mb-2 block">Próxima Fecha</label>
+                <div className="relative group">
+                  <input 
+                    type="date" 
+                    required
+                    value={newMaint.proxima_fecha}
+                    onChange={e => setNewMaint({...newMaint, proxima_fecha: e.target.value})}
+                    className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-purple-500/50 focus:bg-white/10 transition-all outline-none text-white [color-scheme:dark]"
+                  />
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-purple-400 transition-colors" size={18} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Configuration */}
+          <div className="form-section">
+            <div className="flex items-center gap-2 mb-md text-emerald-400">
+              <div className="p-1.5 rounded-lg bg-emerald-500/10">
+                <ClipboardList size={18} />
+              </div>
+              <h5 className="text-sm font-black uppercase tracking-wider">Configuración Técnica</h5>
+            </div>
+
+            <div className="form-group mb-lg">
+              <label className="text-xs font-bold text-muted uppercase tracking-tighter mb-2 block">Plantilla de Revisión (Opcional)</label>
+              <div className="relative group">
+                <select 
+                  value={newMaint.plantilla_id}
+                  onChange={e => setNewMaint({...newMaint, plantilla_id: e.target.value})}
+                  className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-emerald-500/50 focus:bg-white/10 transition-all outline-none text-white appearance-none cursor-pointer"
+                >
+                  <option value="">Sin plantilla vinculada</option>
+                  {templates.map(t => (
+                    <option key={t.id} value={t.id}>{t.nombre}</option>
+                  ))}
+                </select>
+                <ClipboardList className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-emerald-400 transition-colors pointer-events-none" size={18} />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white/20">
+                  <Plus size={14} className="rotate-45" />
+                </div>
+              </div>
+            </div>
+
             <div className="form-group">
-              <label>Próxima Fecha</label>
-              <input 
-                type="date" 
-                required
-                value={newMaint.proxima_fecha}
-                onChange={e => setNewMaint({...newMaint, proxima_fecha: e.target.value})}
+              <label className="text-xs font-bold text-muted uppercase tracking-tighter mb-2 block">Instrucciones / Notas</label>
+              <textarea 
+                value={newMaint.descripcion}
+                onChange={e => setNewMaint({...newMaint, descripcion: e.target.value})}
+                placeholder="Detalles específicos para el equipo técnico..."
+                rows={3}
+                className="w-full p-4 bg-white/5 border border-white/10 rounded-xl focus:border-emerald-500/50 focus:bg-white/10 transition-all outline-none text-white placeholder:text-white/20 resize-none"
               />
             </div>
           </div>
 
-          <div className="form-group">
-            <label>Plantilla de Revisión (Opcional)</label>
-            <select 
-              value={newMaint.plantillaId}
-              onChange={e => setNewMaint({...newMaint, plantillaId: e.target.value})}
+          <div className="flex justify-end items-center gap-md pt-lg border-t border-white/5">
+            <button 
+              type="button" 
+              onClick={() => setIsAddingMaint(false)}
+              className="px-6 py-2.5 rounded-xl text-sm font-bold text-white/60 hover:text-white hover:bg-white/5 transition-all"
             >
-              <option value="">Sin plantilla</option>
-              {templates.map(t => (
-                <option key={t.id} value={t.id}>{t.nombre}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Descripción / Notas</label>
-            <textarea 
-              value={newMaint.descripcion}
-              onChange={e => setNewMaint({...newMaint, descripcion: e.target.value})}
-              placeholder="Detalles específicos para el equipo técnico..."
-              rows={3}
-            />
-          </div>
-
-          <div className="modal-footer px-none pt-md">
-            <Button type="button" variant="ghost" onClick={() => setIsAddingMaint(false)}>Cancelar</Button>
-            <Button type="submit" variant="primary">Crear Tarea</Button>
+              Descartar
+            </button>
+            <button 
+              type="submit" 
+              className="px-8 py-2.5 rounded-xl text-sm font-black text-white bg-gradient-to-r from-indigo-600 to-indigo-500 shadow-lg shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+            >
+              Programar Tarea
+            </button>
           </div>
         </form>
       </Modal>
@@ -440,9 +504,6 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
           overflow: hidden;
         }
       `}</style>
-    </div>
-  );
-};
     </div>
   );
 };
