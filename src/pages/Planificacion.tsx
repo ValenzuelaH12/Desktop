@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { dbService } from '../lib/db'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
 import { 
@@ -245,6 +246,7 @@ export default function Planificacion() {
     try {
       const todayString = new Date().toISOString().split('T')[0]
       const nextDate = calculateNextDate(todayString, completingTask.frecuencia)
+      
       const { error: histError } = await supabase
         .from('historial_mantenimiento')
         .insert([{
@@ -253,15 +255,18 @@ export default function Planificacion() {
           notas: notes,
           items_completados: selectedElements
         }])
+      
       if (histError) throw histError
+      
       const { error: taskError } = await supabase
         .from('mantenimiento_preventivo')
         .update({ proxima_fecha: nextDate, ultima_ejecucion: new Date().toISOString() })
         .eq('id', completingTask.id)
+      
       if (taskError) throw taskError
+      
       setMsg({ type: 'success', text: `Tarea "${completingTask.titulo}" completada. Próxima revisión: ${nextDate}` })
       
-      // 🎉 EFECTO CONFETTI
       confetti({
         particleCount: 150,
         spread: 70,
@@ -439,6 +444,61 @@ export default function Planificacion() {
   const isOverdue = (dateString) => {
     const today = new Date().toISOString().split('T')[0]
     return dateString <= today
+  }
+
+  const generarCertificadoIndividual = async (h) => {
+    const doc = new jsPDF()
+    const hotelName = profile?.hotel || 'Hotel Central'
+    
+    // Configuración inicial
+    doc.setFillColor(34, 40, 49)
+    doc.rect(0, 0, 210, 40, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(22)
+    doc.text('CERTIFICADO DE MANTENIMIENTO', 105, 18, { align: 'center' })
+    doc.setFontSize(10)
+    doc.text(`Sistema de Gestión de Operaciones - ${hotelName}`, 105, 28, { align: 'center' })
+
+    // Información General
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Detalles del Servicio', 14, 55)
+    
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Tarea: ${h.tarea?.titulo}`, 14, 65)
+    doc.text(`Técnico: ${h.perfil?.nombre}`, 14, 70)
+    doc.text(`Fecha/Hora: ${new Date(h.completado_el).toLocaleString()}`, 14, 75)
+    doc.text(`ID Registro: ${h.id.substring(0, 8)}...`, 14, 80)
+
+    // Checklist
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Puntos Verificados', 14, 95)
+    
+    const tableData = (h.items_completados || []).map(item => [item, '✓ Correcto'])
+    autoTable(doc, {
+      startY: 100,
+      head: [['Punto de Inspección', 'Estado']],
+      body: tableData.length > 0 ? tableData : [['Sin elementos especificados', '-']],
+      theme: 'striped',
+      headStyles: { fillColor: [99, 102, 241] }
+    })
+
+    const finalY = (doc as any).lastAutoTable?.finalY || 120
+
+    // Notas
+    if (h.notes) {
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Notas / Observaciones:', 14, finalY + 15)
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
+      doc.text(h.notas || 'Sin observaciones.', 14, finalY + 22)
+    }
+
+    doc.save(`Certificado_${h.tarea?.titulo}_${new Date(h.completado_el).getTime()}.pdf`)
   }
 
   const handleClearHistory = async () => {
@@ -633,7 +693,7 @@ export default function Planificacion() {
                 <div className="p-xl text-center text-muted">Aún no hay registros en el historial.</div>
               ) : (
                 <table className="config-table">
-                  <thead><tr><th>Tarea</th><th>Fecha</th><th>Usuario</th></tr></thead>
+                  <thead><tr><th>Tarea</th><th>Fecha</th><th>Usuario</th><th className="text-right">Acción</th></tr></thead>
                   <tbody>
                     {history.map(h => (
                       <tr key={h.id}>
@@ -655,6 +715,16 @@ export default function Planificacion() {
                           <div className="flex items-center gap-xs text-xs">
                             <User size={12} /> {h.perfil?.nombre}
                           </div>
+                        </td>
+                        <td className="text-right">
+                          <button 
+                            className="btn btn-xs btn-ghost text-accent flex items-center gap-xs ml-auto"
+                            onClick={() => generarCertificadoIndividual(h)}
+                            title="Descargar Certificado PDF"
+                          >
+                            <FileText size={12} />
+                            <span>PDF</span>
+                          </button>
                         </td>
                       </tr>
                     ))}

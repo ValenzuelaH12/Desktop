@@ -10,7 +10,11 @@ export default function Header({ toggleSidebar }) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(false)
-  const { totalUnread: totalChatUnread, chatNotifications } = useNotifications()
+  const { totalUnread: totalChatUnread, chatNotifications, dismissNotification, clearChannelUnread } = useNotifications()
+  const [seenNotificationIds, setSeenNotificationIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('vsuite_seen_notifications')
+    return saved ? JSON.parse(saved) : []
+  })
 
   // Search global
   const [searchQuery, setSearchQuery] = useState('')
@@ -49,12 +53,26 @@ export default function Header({ toggleSidebar }) {
           link: '/planificacion', icon: Clock, color: 'info'
         }))
       ]
-      setNotifications(formattedNotifications)
+      setNotifications(formattedNotifications.filter(n => !seenNotificationIds.includes(n.id)))
     } catch (error) { console.error('Error fetching notifications:', error) }
   }
 
-  const handleNotificationClick = (link) => {
-    navigate(link)
+  const handleNotificationClick = (n) => {
+    // Si es chat, limpiar unread del canal
+    if (n.type === 'chat') {
+      const channelId = n.title.replace('Mensaje en ', '')
+      clearChannelUnread(channelId)
+    }
+    
+    // Marcar como vista (para persistencia local)
+    const newSeen = [...seenNotificationIds, n.id]
+    setSeenNotificationIds(newSeen)
+    localStorage.setItem('vsuite_seen_notifications', JSON.stringify(newSeen))
+    
+    // Remover del estado global si es de chat
+    dismissNotification(n.id)
+    
+    navigate(n.link)
     setShowNotifications(false)
   }
 
@@ -62,7 +80,7 @@ export default function Header({ toggleSidebar }) {
     fetchNotifications()
     const interval = setInterval(fetchNotifications, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [seenNotificationIds])
 
   // Búsqueda con debounce
   useEffect(() => {
@@ -203,7 +221,7 @@ export default function Header({ toggleSidebar }) {
                       <div 
                         key={n.id} 
                         className="notification-item"
-                        onClick={() => handleNotificationClick(n.link)}
+                        onClick={() => handleNotificationClick(n)}
                       >
                         <div className={`notification-icon text-${n.color}`}>
                           <Icon size={18} />

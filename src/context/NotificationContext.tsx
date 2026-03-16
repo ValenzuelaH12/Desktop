@@ -134,12 +134,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setChatNotifications(prev => prev.filter(n => !n.title.toLowerCase().includes(channelId.toLowerCase())))
   }
 
+  const dismissNotification = (id: string) => {
+    setChatNotifications(prev => prev.filter(n => n.id !== id))
+  }
+
   return (
     <NotificationContext.Provider value={{ 
       unreadPerChannel, 
       totalUnread, 
       chatNotifications, 
       clearChannelUnread,
+      dismissNotification,
       sendNotification,
       permission 
     }}>

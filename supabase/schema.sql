@@ -329,6 +329,29 @@ create table if not exists public.mensaje_lecturas (
 );
 
 alter table public.mensaje_lecturas enable row level security;
-do $`$ begin create policy "Cualquiera puede ver confirmaciones" on public.mensaje_lecturas for select using (true); exception when duplicate_object then null; end $`$;
-do $`$ begin create policy "Usuarios pueden confirmar lectura" on public.mensaje_lecturas for insert with check (user_id = auth.uid()); exception when duplicate_object then null; end $`$;
+do $$ begin create policy "Cualquiera puede ver confirmaciones" on public.mensaje_lecturas for select using (true); exception when duplicate_object then null; end $$;
+do $$ begin create policy "Usuarios pueden confirmar lectura" on public.mensaje_lecturas for insert with check (user_id = auth.uid()); exception when duplicate_object then null; end $$;
+
+-- MANTENIMIENTO AVANZADO (FASE 3)
+-- Añadir firma a historial
+alter table public.historial_mantenimiento add column if not exists firma_url text;
+
+-- Nueva tabla para plantillas de checklist
+create table if not exists public.mantenimiento_plantillas (
+    id uuid default gen_random_uuid() primary key,
+    nombre text not null,
+    items jsonb default '[]'::jsonb,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.mantenimiento_plantillas enable row level security;
+
+do $$ begin
+    create policy "Usuarios autenticados pueden ver plantillas" on public.mantenimiento_plantillas
+        for select using (auth.role() = 'authenticated');
+    create policy "Admins y mantenimiento pueden gestionar plantillas" on public.mantenimiento_plantillas
+        for all using (
+            exists (select 1 from public.perfiles where id = auth.uid() and rol in ('admin', 'direccion', 'mantenimiento'))
+        );
+exception when others then null; end $$;
 

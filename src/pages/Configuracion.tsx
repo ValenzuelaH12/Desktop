@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { 
   Users, UserPlus, Shield, Hotel, Plus, X, RefreshCw, Trash2, MessageSquare, Activity, ClipboardList,
-  LayoutDashboard, AlertTriangle, Calendar, Settings, Check, Package, QrCode, Smartphone, Wrench
+  LayoutDashboard, AlertTriangle, Calendar, Settings, Check, Package, QrCode, Smartphone, Wrench,
+  ChevronDown, ChevronUp, DoorOpen, MapPin, Layers, Hash, BookOpen, FileText
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -26,6 +27,7 @@ export default function Configuracion() {
   const [contadores, setContadores] = useState([])
   const [tipos, setTipos] = useState([])
   const [mantenimiento, setMantenimiento] = useState([])
+  const [plantillas, setPlantillas] = useState([])
   const [elementos, setElementos] = useState([])
   const [activos, setActivos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -37,6 +39,7 @@ export default function Configuracion() {
   const [isAddingCanal, setIsAddingCanal] = useState(false)
   const [isAddingContador, setIsAddingContador] = useState(false)
   const [isAddingMantenimiento, setIsAddingMantenimiento] = useState(false)
+  const [isAddingPlantilla, setIsAddingPlantilla] = useState(false)
   const [isAddingActivo, setIsAddingActivo] = useState(false)
   const [isEditingContador, setIsEditingContador] = useState(false)
   const [isDeleting, setIsDeleting] = useState({ show: false, table: '', id: '', itemName: '' })
@@ -63,8 +66,11 @@ export default function Configuracion() {
     titulo: '', 
     descripcion: '', 
     frecuencia: 'mensual',
-    proxima_fecha: new Date().toISOString().split('T')[0]
+    proxima_fecha: new Date().toISOString().split('T')[0],
+    plantillaId: ''
   })
+  const [newPlantilla, setNewPlantilla] = useState({ nombre: '', items: [] })
+  const [newPlantillaItem, setNewPlantillaItem] = useState('')
   const [newActivo, setNewActivo] = useState({
     nombre: '',
     tipo: 'maquinaria',
@@ -88,6 +94,7 @@ export default function Configuracion() {
       fetchCanales(t),
       fetchContadores(t),
       fetchMantenimiento(t),
+      fetchPlantillas(t),
       fetchElementos(t),
       fetchActivos(t)
     ])
@@ -137,6 +144,14 @@ export default function Configuracion() {
       const { data, error } = await supabase.from('mantenimiento_preventivo').select('*').order('frecuencia')
       if (error) throw error
       setMantenimiento(data)
+    } catch (error) { console.error(error) }
+  }
+
+  const fetchPlantillas = async (t?: any) => {
+    try {
+      const { data, error } = await supabase.from('mantenimiento_plantillas').select('*').order('nombre')
+      if (error) throw error
+      setPlantillas(data || [])
     } catch (error) { console.error(error) }
   }
 
@@ -321,20 +336,40 @@ export default function Configuracion() {
     e.preventDefault()
     setMsg({ type: '', text: '' })
     try {
-      const { error } = await supabase.from('mantenimiento_preventivo').insert([{
-        ...newMantenimiento,
+      const { data: taskData, error: taskError } = await supabase.from('mantenimiento_preventivo').insert([{
+        titulo: newMantenimiento.titulo,
+        descripcion: newMantenimiento.descripcion,
+        frecuencia: newMantenimiento.frecuencia,
+        proxima_fecha: newMantenimiento.proxima_fecha,
         creado_por: profile.id
-      }])
-      if (error) throw error
-      setMsg({ type: 'success', text: 'Tarea de mantenimiento creada.' })
+      }]).select()
+
+      if (taskError) throw taskError
+      
+      // Si hay plantilla seleccionada, insertar sus ítems como elementos
+      if (newMantenimiento.plantillaId && taskData?.[0]) {
+        const plantilla = plantillas.find(p => p.id === newMantenimiento.plantillaId)
+        if (plantilla && plantilla.items?.length > 0) {
+          const elementsToInsert = plantilla.items.map(item => ({
+            tarea_id: taskData[0].id,
+            nombre: item
+          }))
+          const { error: elemError } = await supabase.from('elementos_mantenimiento').insert(elementsToInsert)
+          if (elemError) console.error("Error insertando elementos de plantilla:", elemError)
+        }
+      }
+
+      setMsg({ type: 'success', text: 'Tarea de mantenimiento creada con éxito.' })
       setIsAddingMantenimiento(false)
       setNewMantenimiento({ 
         titulo: '', 
         descripcion: '', 
         frecuencia: 'mensual',
-        proxima_fecha: new Date().toISOString().split('T')[0]
+        proxima_fecha: new Date().toISOString().split('T')[0],
+        plantillaId: ''
       })
       fetchMantenimiento()
+      fetchElementos()
     } catch (error) { 
       setMsg({ type: 'error', text: `Error al crear mantenimiento: ${error.message}` })
     }
@@ -366,6 +401,25 @@ export default function Configuracion() {
       fetchElementos()
     } catch (error) { 
       setMsg({ type: 'error', text: `Error al añadir elemento: ${error.message}` })
+    }
+  }
+
+  const handleAddPlantilla = async (e) => {
+    e.preventDefault()
+    if (!newPlantilla.nombre.trim()) return
+    setMsg({ type: '', text: '' })
+    try {
+      const { error } = await supabase.from('mantenimiento_plantillas').insert([{
+        nombre: newPlantilla.nombre,
+        items: newPlantilla.items
+      }])
+      if (error) throw error
+      setMsg({ type: 'success', text: 'Plantilla creada correctamente.' })
+      setIsAddingPlantilla(false)
+      setNewPlantilla({ nombre: '', items: [] })
+      fetchPlantillas()
+    } catch (error) {
+      setMsg({ type: 'error', text: `Error al crear plantilla: ${error.message}` })
     }
   }
 
@@ -428,6 +482,7 @@ export default function Configuracion() {
       if (table === 'mantenimiento_preventivo') setMantenimiento(prev => prev.filter(m => String(m.id) !== idStr))
       if (table === 'elementos_mantenimiento') setElementos(prev => prev.filter(e => String(e.id) !== idStr))
       if (table === 'activos') setActivos(prev => prev.filter(a => String(a.id) !== idStr))
+      if (table === 'mantenimiento_plantillas') setPlantillas(prev => prev.filter(p => String(p.id) !== idStr))
 
       setTimeout(fetchAll, 500)
     } catch (error) { 
@@ -451,7 +506,7 @@ export default function Configuracion() {
           <button 
             className="btn btn-secondary" 
             onClick={() => {
-              const tabOrder = ['usuarios', 'zonas', 'tipos', 'canales', 'contadores', 'mantenimiento', 'v-nexus', 'v-qr']
+              const tabOrder = ['usuarios', 'zonas', 'tipos', 'canales', 'contadores', 'mantenimiento', 'plantillas', 'v-nexus', 'v-qr']
               const currentIndex = tabOrder.indexOf(activeTab)
               const nextIndex = (currentIndex + 1) % tabOrder.length
               setActiveTab(tabOrder[nextIndex])
@@ -499,6 +554,12 @@ export default function Configuracion() {
           onClick={() => setActiveTab('mantenimiento')}
         >
           <ClipboardList size={18} /> Mantenimiento
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'plantillas' ? 'active' : ''}`}
+          onClick={() => setActiveTab('plantillas')}
+        >
+          <FileText size={18} /> Plantillas
         </button>
         <button 
           className={`tab-btn ${activeTab === 'v-nexus' ? 'active' : ''}`}
@@ -565,87 +626,385 @@ export default function Configuracion() {
         )}
 
         {activeTab === 'zonas' && (
-          <div className="glass-card table-panel">
-            <div className="panel-header border-b">
-              <div className="flex items-center gap-md">
-                <Hotel size={20} className="text-accent" />
-                <h3>Zonas del Hotel</h3>
+          <div className="zonas-redesign animate-fade-in">
+            {/* Header Premium */}
+            <div className="zonas-header glass-card">
+              <div className="zonas-header-left">
+                <div className="zonas-icon-wrap">
+                  <Layers size={24} />
+                </div>
+                <div>
+                  <h3 className="zonas-title">Zonas del Hotel</h3>
+                  <p className="zonas-subtitle">{zonas.length} zonas · {habitaciones.length} habitaciones en total</p>
+                </div>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={() => setIsAddingZona(true)}>
+              <button className="btn btn-primary" onClick={() => setIsAddingZona(true)}>
                 <Plus size={16} /> Nueva Zona
               </button>
             </div>
-            <div className="panel-body p-none">
-              <div className="table-responsive">
-                <table className="config-table">
-                  <thead><tr><th>Zona</th><th>Habitaciones</th><th>Acción</th></tr></thead>
-                  <tbody>
-                    {zonas.map(z => (
-                      <tr key={z.id}>
-                        <td>
-                          <div className="flex flex-col gap-xs py-xs">
-                            <span className="text-primary font-bold">{z.nombre}</span>
-                            <span className="text-[10px] text-muted uppercase tracking-wider">Creado: {new Date(z.created_at).toLocaleDateString()}</span>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="flex flex-wrap gap-xs">
-                            {habitaciones.filter(h => h.zona_id === z.id).map(h => (
-                              <span key={h.id} className="badge badge-secondary text-xs flex items-center gap-xs">
-                                {h.nombre}
-                                <button 
-                                  className="btn-icon btn-ghost p-none text-danger h-auto w-auto hover:bg-danger/10 rounded-full" 
-                                  onClick={() => handleDelete('habitaciones', h.id, `Habitación ${h.nombre}`)}
-                                  title="Borrar habitación"
-                                >
-                                  <X size={10} />
-                                </button>
-                              </span>
-                            ))}
-                            <button className="btn btn-ghost btn-xs text-accent" onClick={() => { setSelectedZona(z); setNewHabitacion({...newHabitacion, zona_id: z.id}); setIsAddingHabitacion(true); }}>
-                              <Plus size={12} /> Hab.
+
+            {/* Zona Cards Grid */}
+            <div className="zonas-grid">
+              {zonas.map((z, idx) => {
+                const zonHabs = habitaciones.filter(h => h.zona_id === z.id)
+                const gradients = [
+                  'linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.08) 100%)',
+                  'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(6,148,162,0.08) 100%)',
+                  'linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(239,68,68,0.08) 100%)',
+                  'linear-gradient(135deg, rgba(236,72,153,0.15) 0%, rgba(168,85,247,0.08) 100%)',
+                  'linear-gradient(135deg, rgba(14,165,233,0.15) 0%, rgba(99,102,241,0.08) 100%)',
+                  'linear-gradient(135deg, rgba(34,197,94,0.15) 0%, rgba(16,185,129,0.08) 100%)'
+                ]
+                const accentColors = ['#6366f1','#10b981','#f59e0b','#ec4899','#0ea5e9','#22c55e']
+                const accent = accentColors[idx % accentColors.length]
+                const gradient = gradients[idx % gradients.length]
+
+                return (
+                  <div key={z.id} className="zona-card glass-card" style={{ background: gradient, '--zona-accent': accent } as React.CSSProperties}>
+                    {/* Card Header */}
+                    <div className="zona-card-header">
+                      <div className="zona-card-identity">
+                        <div className="zona-avatar" style={{ background: `${accent}22`, color: accent, border: `2px solid ${accent}44` }}>
+                          <MapPin size={18} />
+                        </div>
+                        <div>
+                          <h4 className="zona-card-name">{z.nombre}</h4>
+                          <span className="zona-card-date">
+                            <Calendar size={10} /> {new Date(z.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="zona-card-actions">
+                        <div className="zona-counter" style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}33` }}>
+                          <DoorOpen size={13} />
+                          <span>{zonHabs.length}</span>
+                        </div>
+                        <button 
+                          className="zona-delete-btn" 
+                          onClick={() => handleDelete('zonas', z.id, z.nombre)}
+                          title="Eliminar zona completa"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Habitaciones Grid */}
+                    <div className="zona-habs-section">
+                      <div className="zona-habs-label">
+                        <Hash size={11} /> Habitaciones / Sitios
+                      </div>
+                      <div className="zona-habs-grid">
+                        {zonHabs.map(h => (
+                          <div key={h.id} className="zona-hab-chip" style={{ '--chip-accent': accent } as React.CSSProperties}>
+                            <DoorOpen size={12} className="zona-hab-icon" />
+                            <span className="zona-hab-name">{h.nombre}</span>
+                            <button 
+                              className="zona-hab-delete"
+                              onClick={() => handleDelete('habitaciones', h.id, `Habitación ${h.nombre}`)}
+                              title={`Borrar ${h.nombre}`}
+                            >
+                              <X size={10} />
                             </button>
                           </div>
-                        </td>
-                        <td><button className="btn-icon btn-ghost text-danger" onClick={() => handleDelete('zonas', z.id, z.nombre)}><Trash2 size={16} /></button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        ))}
+                        {/* Add button */}
+                        <button 
+                          className="zona-hab-add" 
+                          style={{ borderColor: `${accent}44`, color: accent }}
+                          onClick={() => { setSelectedZona(z); setNewHabitacion({...newHabitacion, zona_id: z.id}); setIsAddingHabitacion(true); }}
+                        >
+                          <Plus size={14} />
+                          <span>Añadir</span>
+                        </button>
+                      </div>
+                      {zonHabs.length === 0 && (
+                        <div className="zona-empty">
+                          <DoorOpen size={20} style={{ opacity: 0.3 }} />
+                          <span>Sin habitaciones asignadas</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
+
+            <style>{`
+              .zonas-redesign { display: flex; flex-direction: column; gap: var(--spacing-lg); }
+              .zonas-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; }
+              .zonas-header-left { display: flex; align-items: center; gap: 1rem; }
+              .zonas-icon-wrap {
+                width: 44px; height: 44px; border-radius: 12px;
+                background: linear-gradient(135deg, var(--color-accent), #a855f7);
+                display: flex; align-items: center; justify-content: center;
+                color: white; box-shadow: 0 4px 15px rgba(99,102,241,0.35);
+              }
+              .zonas-title { font-size: 1.15rem; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
+              .zonas-subtitle { font-size: 0.75rem; color: var(--color-text-muted); margin-top: 2px; }
+
+              .zonas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: var(--spacing-lg); }
+
+              .zona-card {
+                padding: 0 !important; overflow: hidden;
+                border: 1px solid rgba(255,255,255,0.06);
+                transition: transform 0.3s cubic-bezier(.4,0,.2,1), box-shadow 0.3s ease;
+              }
+              .zona-card:hover {
+                transform: translateY(-4px);
+                box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.08);
+              }
+
+              .zona-card-header {
+                display: flex; justify-content: space-between; align-items: center;
+                padding: 1.15rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.05);
+              }
+              .zona-card-identity { display: flex; align-items: center; gap: 0.75rem; }
+              .zona-avatar {
+                width: 38px; height: 38px; border-radius: 10px;
+                display: flex; align-items: center; justify-content: center;
+                transition: transform 0.25s ease;
+              }
+              .zona-card:hover .zona-avatar { transform: scale(1.1) rotate(5deg); }
+              .zona-card-name { font-weight: 700; font-size: 1rem; margin: 0; letter-spacing: -0.01em; }
+              .zona-card-date {
+                display: flex; align-items: center; gap: 4px;
+                font-size: 0.65rem; color: var(--color-text-muted); text-transform: uppercase;
+                letter-spacing: 0.05em; margin-top: 2px;
+              }
+              .zona-card-actions { display: flex; align-items: center; gap: 0.5rem; }
+              .zona-counter {
+                display: flex; align-items: center; gap: 4px;
+                padding: 4px 10px; border-radius: 999px;
+                font-size: 0.75rem; font-weight: 700;
+              }
+              .zona-delete-btn {
+                width: 30px; height: 30px; border-radius: 8px; border: none;
+                background: rgba(239,68,68,0.08); color: rgba(239,68,68,0.5);
+                display: flex; align-items: center; justify-content: center;
+                cursor: pointer; transition: all 0.2s ease;
+              }
+              .zona-delete-btn:hover { background: rgba(239,68,68,0.2); color: #ef4444; transform: scale(1.1); }
+
+              .zona-habs-section { padding: 1rem 1.25rem 1.25rem; }
+              .zona-habs-label {
+                display: flex; align-items: center; gap: 5px;
+                font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+                letter-spacing: 0.08em; color: var(--color-text-muted);
+                margin-bottom: 0.65rem;
+              }
+              .zona-habs-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+              .zona-hab-chip {
+                display: flex; align-items: center; gap: 5px;
+                padding: 5px 8px 5px 10px;
+                background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 8px; font-size: 0.78rem; font-weight: 500;
+                transition: all 0.2s ease; position: relative;
+              }
+              .zona-hab-chip:hover {
+                background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15);
+                transform: translateY(-1px);
+              }
+              .zona-hab-icon { opacity: 0.4; flex-shrink: 0; }
+              .zona-hab-name { white-space: nowrap; }
+              .zona-hab-delete {
+                width: 18px; height: 18px; border-radius: 50%;
+                border: none; background: transparent; color: rgba(255,255,255,0.25);
+                display: flex; align-items: center; justify-content: center;
+                cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;
+                margin-left: 2px;
+              }
+              .zona-hab-chip:hover .zona-hab-delete { color: #ef4444; background: rgba(239,68,68,0.1); }
+              .zona-hab-delete:hover { background: rgba(239,68,68,0.25) !important; transform: scale(1.15); }
+
+              .zona-hab-add {
+                display: flex; align-items: center; gap: 4px;
+                padding: 5px 12px; border-radius: 8px;
+                border: 1.5px dashed; background: transparent;
+                font-size: 0.75rem; font-weight: 600;
+                cursor: pointer; transition: all 0.2s ease;
+              }
+              .zona-hab-add:hover { background: rgba(255,255,255,0.05); transform: translateY(-1px); }
+
+              .zona-empty {
+                display: flex; align-items: center; gap: 8px;
+                justify-content: center; padding: 1rem;
+                color: var(--color-text-muted); font-size: 0.75rem;
+                font-style: italic;
+              }
+
+              @media (max-width: 640px) {
+                .zonas-grid { grid-template-columns: 1fr; }
+                .zonas-header { flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+              }
+            `}</style>
           </div>
         )}
 
-        {activeTab === 'tipos' && (
-          <div className="glass-card table-panel">
-            <div className="panel-header border-b">
-              <div className="flex items-center gap-md">
-                <Shield size={20} className="text-accent" />
-                <h3>Tipos de Problemas</h3>
+        {activeTab === 'tipos' && (() => {
+          const categoryConfig: Record<string, { icon: typeof Shield, gradient: string, accent: string, label: string }> = {
+            'general':       { icon: Shield,        gradient: 'linear-gradient(135deg, rgba(99,102,241,0.14) 0%, rgba(139,92,246,0.06) 100%)',  accent: '#6366f1', label: 'General' },
+            'electricidad':  { icon: Activity,       gradient: 'linear-gradient(135deg, rgba(245,158,11,0.14) 0%, rgba(239,68,68,0.06) 100%)',   accent: '#f59e0b', label: 'Electricidad' },
+            'fontaneria':    { icon: Activity,       gradient: 'linear-gradient(135deg, rgba(14,165,233,0.14) 0%, rgba(99,102,241,0.06) 100%)',  accent: '#0ea5e9', label: 'Fontanería' },
+            'limpieza':      { icon: Check,          gradient: 'linear-gradient(135deg, rgba(16,185,129,0.14) 0%, rgba(6,148,162,0.06) 100%)',   accent: '#10b981', label: 'Limpieza' },
+            'climatizacion': { icon: Activity,       gradient: 'linear-gradient(135deg, rgba(6,182,212,0.14) 0%, rgba(14,165,233,0.06) 100%)',   accent: '#06b6d4', label: 'Climatización' },
+            'seguridad':     { icon: AlertTriangle,  gradient: 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(236,72,153,0.06) 100%)',   accent: '#ef4444', label: 'Seguridad' },
+            'mobiliario':    { icon: Package,         gradient: 'linear-gradient(135deg, rgba(168,85,247,0.14) 0%, rgba(236,72,153,0.06) 100%)',  accent: '#a855f7', label: 'Mobiliario' },
+          }
+          const defaultCfg = { icon: Shield, gradient: 'linear-gradient(135deg, rgba(148,163,184,0.12) 0%, rgba(100,116,139,0.06) 100%)', accent: '#94a3b8', label: 'Otro' }
+
+          // Group by category
+          const grouped = tipos.reduce((acc: Record<string, typeof tipos>, t: any) => {
+            const cat = t.categoria || 'general'
+            if (!acc[cat]) acc[cat] = []
+            acc[cat].push(t)
+            return acc
+          }, {} as Record<string, typeof tipos>)
+
+          return (
+          <div className="tipos-redesign animate-fade-in">
+            {/* Header Premium */}
+            <div className="tipos-header glass-card">
+              <div className="tipos-header-left">
+                <div className="tipos-icon-wrap">
+                  <Shield size={24} />
+                </div>
+                <div>
+                  <h3 className="tipos-title">Tipos de Problemas</h3>
+                  <p className="tipos-subtitle">{tipos.length} tipos en {Object.keys(grouped).length} categorías</p>
+                </div>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={() => setIsAddingTipo(true)}>
+              <button className="btn btn-primary" onClick={() => setIsAddingTipo(true)}>
                 <Plus size={16} /> Nuevo Tipo
               </button>
             </div>
-            <div className="panel-body p-none">
-              <div className="table-responsive">
-                <table className="config-table">
-                  <thead><tr><th>Nombre</th><th>Categoría</th><th>Acción</th></tr></thead>
-                  <tbody>
-                    {tipos.map(t => (
-                      <tr key={t.id}>
-                        <td>{t.nombre}</td>
-                        <td><span className="badge-status general">{t.categoria}</span></td>
-                        <td><button className="btn-icon btn-ghost text-danger" onClick={() => handleDelete('tipos_problemas', t.id, t.nombre)}><Trash2 size={16} /></button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+
+            {/* Category Groups */}
+            <div className="tipos-categories">
+              {Object.entries(grouped).map(([cat, items]) => {
+                const cfg = categoryConfig[cat] || defaultCfg
+                const IconComp = cfg.icon
+                return (
+                  <div key={cat} className="tipos-category-card glass-card" style={{ background: cfg.gradient }}>
+                    {/* Category Header */}
+                    <div className="tipos-cat-header">
+                      <div className="tipos-cat-identity">
+                        <div className="tipos-cat-avatar" style={{ background: `${cfg.accent}20`, color: cfg.accent, border: `2px solid ${cfg.accent}40` }}>
+                          <IconComp size={18} />
+                        </div>
+                        <div>
+                          <h4 className="tipos-cat-name">{cfg.label}</h4>
+                          <span className="tipos-cat-count">{(items as any[]).length} {(items as any[]).length === 1 ? 'tipo' : 'tipos'}</span>
+                        </div>
+                      </div>
+                      <div className="tipos-cat-badge" style={{ background: `${cfg.accent}18`, color: cfg.accent, border: `1px solid ${cfg.accent}33` }}>
+                        {cat.toUpperCase()}
+                      </div>
+                    </div>
+
+                    {/* Types Grid */}
+                    <div className="tipos-items-section">
+                      <div className="tipos-items-grid">
+                        {(items as any[]).map((t: any) => (
+                          <div key={t.id} className="tipo-chip" style={{ '--tipo-accent': cfg.accent } as React.CSSProperties}>
+                            <div className="tipo-chip-dot" style={{ background: cfg.accent }} />
+                            <span className="tipo-chip-name">{t.nombre}</span>
+                            <button 
+                              className="tipo-chip-delete"
+                              onClick={() => handleDelete('tipos_problemas', t.id, t.nombre)}
+                              title={`Borrar ${t.nombre}`}
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
+
+            <style>{`
+              .tipos-redesign { display: flex; flex-direction: column; gap: var(--spacing-lg); }
+              .tipos-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; }
+              .tipos-header-left { display: flex; align-items: center; gap: 1rem; }
+              .tipos-icon-wrap {
+                width: 44px; height: 44px; border-radius: 12px;
+                background: linear-gradient(135deg, #ef4444, #f59e0b);
+                display: flex; align-items: center; justify-content: center;
+                color: white; box-shadow: 0 4px 15px rgba(239,68,68,0.3);
+              }
+              .tipos-title { font-size: 1.15rem; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
+              .tipos-subtitle { font-size: 0.75rem; color: var(--color-text-muted); margin-top: 2px; }
+
+              .tipos-categories { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: var(--spacing-lg); }
+
+              .tipos-category-card {
+                padding: 0 !important; overflow: hidden;
+                border: 1px solid rgba(255,255,255,0.06);
+                transition: transform 0.3s cubic-bezier(.4,0,.2,1), box-shadow 0.3s ease;
+              }
+              .tipos-category-card:hover {
+                transform: translateY(-4px);
+                box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.08);
+              }
+              .tipos-cat-header {
+                display: flex; justify-content: space-between; align-items: center;
+                padding: 1.15rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.05);
+              }
+              .tipos-cat-identity { display: flex; align-items: center; gap: 0.75rem; }
+              .tipos-cat-avatar {
+                width: 38px; height: 38px; border-radius: 10px;
+                display: flex; align-items: center; justify-content: center;
+                transition: transform 0.25s ease;
+              }
+              .tipos-category-card:hover .tipos-cat-avatar { transform: scale(1.1) rotate(5deg); }
+              .tipos-cat-name { font-weight: 700; font-size: 1rem; margin: 0; }
+              .tipos-cat-count { font-size: 0.65rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+              .tipos-cat-badge {
+                padding: 4px 10px; border-radius: 999px;
+                font-size: 0.6rem; font-weight: 800; letter-spacing: 0.08em;
+              }
+
+              .tipos-items-section { padding: 1rem 1.25rem 1.25rem; }
+              .tipos-items-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+
+              .tipo-chip {
+                display: flex; align-items: center; gap: 8px;
+                padding: 8px 10px 8px 12px;
+                background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 10px; font-size: 0.82rem; font-weight: 500;
+                transition: all 0.2s ease;
+              }
+              .tipo-chip:hover {
+                background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15);
+                transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+              }
+              .tipo-chip-dot {
+                width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+                box-shadow: 0 0 6px currentColor;
+              }
+              .tipo-chip-name { white-space: nowrap; }
+              .tipo-chip-delete {
+                width: 22px; height: 22px; border-radius: 6px;
+                border: none; background: transparent; color: rgba(255,255,255,0.2);
+                display: flex; align-items: center; justify-content: center;
+                cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;
+                margin-left: 2px;
+              }
+              .tipo-chip:hover .tipo-chip-delete { color: #ef4444; background: rgba(239,68,68,0.1); }
+              .tipo-chip-delete:hover { background: rgba(239,68,68,0.25) !important; transform: scale(1.15); }
+
+              @media (max-width: 640px) {
+                .tipos-categories { grid-template-columns: 1fr; }
+                .tipos-header { flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+              }
+            `}</style>
           </div>
-        )}
+          )
+        })()}
 
         {activeTab === 'canales' && (
           <div className="glass-card table-panel">
@@ -717,72 +1076,412 @@ export default function Configuracion() {
           </div>
         )}
 
-        {activeTab === 'mantenimiento' && (
-          <div className="glass-card table-panel">
-            <div className="panel-header border-b">
-              <div className="flex items-center gap-md">
-                <ClipboardList size={20} className="text-accent" />
-                <h3>Tareas de Mantenimiento Preventivo</h3>
+        {activeTab === 'mantenimiento' && (() => {
+          const freqConfig: Record<string, { gradient: string, accent: string, label: string }> = {
+            'diario':    { gradient: 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(245,158,11,0.06) 100%)',    accent: '#ef4444', label: 'Diario' },
+            'semanal':   { gradient: 'linear-gradient(135deg, rgba(245,158,11,0.14) 0%, rgba(234,179,8,0.06) 100%)',    accent: '#f59e0b', label: 'Semanal' },
+            'quincenal': { gradient: 'linear-gradient(135deg, rgba(14,165,233,0.14) 0%, rgba(99,102,241,0.06) 100%)',   accent: '#0ea5e9', label: 'Quincenal' },
+            'mensual':   { gradient: 'linear-gradient(135deg, rgba(99,102,241,0.14) 0%, rgba(139,92,246,0.06) 100%)',   accent: '#6366f1', label: 'Mensual' },
+            'trimestral':{ gradient: 'linear-gradient(135deg, rgba(16,185,129,0.14) 0%, rgba(6,148,162,0.06) 100%)',    accent: '#10b981', label: 'Trimestral' },
+            'semestral': { gradient: 'linear-gradient(135deg, rgba(168,85,247,0.14) 0%, rgba(236,72,153,0.06) 100%)',   accent: '#a855f7', label: 'Semestral' },
+            'anual':     { gradient: 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(16,185,129,0.06) 100%)',    accent: '#22c55e', label: 'Anual' },
+          }
+          const defaultFreq = { gradient: 'linear-gradient(135deg, rgba(148,163,184,0.12) 0%, rgba(100,116,139,0.06) 100%)', accent: '#94a3b8', label: 'Otro' }
+
+          const getDaysUntil = (dateStr: string) => {
+            if (!dateStr) return null
+            const diff = Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000*60*60*24))
+            return diff
+          }
+
+          return (
+          <div className="mant-redesign animate-fade-in">
+            {/* Header Premium */}
+            <div className="mant-header glass-card">
+              <div className="mant-header-left">
+                <div className="mant-icon-wrap">
+                  <Wrench size={24} />
+                </div>
+                <div>
+                  <h3 className="mant-title">Mantenimiento Preventivo</h3>
+                  <p className="mant-subtitle">{mantenimiento.length} tareas programadas</p>
+                </div>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={() => setIsAddingMantenimiento(true)}>
+              <button className="btn btn-primary" onClick={() => setIsAddingMantenimiento(true)}>
                 <Plus size={16} /> Nueva Tarea
               </button>
             </div>
-            <div className="panel-body p-none">
-              <div className="table-responsive">
-                <table className="config-table">
-                  <thead><tr><th>Tarea / Elementos</th><th>Frecuencia</th><th>Próxima Fecha</th><th>Acción</th></tr></thead>
-                  <tbody>
-                    {mantenimiento.map(m => (
-                      <tr key={m.id}>
-                        <td className="p-md">
-                          <div className="flex flex-column gap-xs">
-                            <strong className="text-lg">{m.titulo}</strong>
-                            <span className="text-xs text-muted mb-sm">{m.descripcion}</span>
-                            
-                            <div className="bg-accent/5 p-sm rounded-md mt-xs">
-                              <p className="text-xs font-bold text-accent mb-xs uppercase letter-spacing-wider">Elementos / Sub-tareas:</p>
-                              <div className="flex flex-wrap gap-xs mb-sm">
-                                {elementos.filter(e => e.tarea_id === m.id).map(e => (
-                                  <span key={e.id} className="badge badge-neutral flex items-center gap-xs pr-xs">
-                                    {e.nombre}
-                                    <button 
-                                      className="btn-icon btn-ghost p-none text-danger h-auto w-auto" 
-                                      onClick={() => handleDelete('elementos_mantenimiento', e.id, e.nombre)}
-                                    >
-                                      <X size={12} />
-                                    </button>
-                                  </span>
-                                ))}
-                                {elementos.filter(e => e.tarea_id === m.id).length === 0 && (
-                                  <span className="text-xs text-muted italic">Sin elementos aún</span>
-                                )}
-                              </div>
-                              <div className="flex gap-xs">
-                                <input 
-                                  type="text" 
-                                  className="input input-sm border-accent/20" 
-                                  placeholder="Añadir elemento (ej. Caldera 1)..."
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      const input = e.target as HTMLInputElement;
-                                      handleAddElemento(m.id, input.value)
-                                      input.value = ''
-                                    }
-                                  }}
-                                />
-                              </div>
-                            </div>
+
+            {/* Task Cards Grid */}
+            <div className="mant-grid">
+              {mantenimiento.map((m: any) => {
+                const cfg = freqConfig[m.frecuencia] || defaultFreq
+                const taskElements = elementos.filter((e: any) => e.tarea_id === m.id)
+                const daysUntil = getDaysUntil(m.proxima_fecha)
+                const isUrgent = daysUntil !== null && daysUntil <= 3
+                const isPast = daysUntil !== null && daysUntil < 0
+
+                return (
+                  <div key={m.id} className="mant-card glass-card" style={{ background: cfg.gradient }}>
+                    {/* Card Header */}
+                    <div className="mant-card-header">
+                      <div className="mant-card-identity">
+                        <div className="mant-card-avatar" style={{ background: `${cfg.accent}20`, color: cfg.accent, border: `2px solid ${cfg.accent}40` }}>
+                          <Wrench size={18} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <h4 className="mant-card-name">{m.titulo}</h4>
+                          {m.descripcion && (
+                            <p className="mant-card-desc">{m.descripcion}</p>
+                          )}
+                        </div>
+                      </div>
+                      <button 
+                        className="mant-delete-btn" 
+                        onClick={() => handleDelete('mantenimiento_preventivo', m.id, m.titulo)}
+                        title="Eliminar tarea"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+
+                    {/* Info Bar */}
+                    <div className="mant-info-bar">
+                      <div className="mant-info-item">
+                        <RefreshCw size={12} />
+                        <span className="mant-freq-badge" style={{ background: `${cfg.accent}18`, color: cfg.accent, border: `1px solid ${cfg.accent}33` }}>
+                          {cfg.label}
+                        </span>
+                      </div>
+                      <div className={`mant-info-item ${isPast ? 'mant-overdue' : isUrgent ? 'mant-urgent' : ''}`}>
+                        <Calendar size={12} />
+                        <span className="mant-date-text">
+                          {m.proxima_fecha ? new Date(m.proxima_fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : 'Sin fecha'}
+                        </span>
+                        {daysUntil !== null && (
+                          <span className={`mant-countdown ${isPast ? 'past' : isUrgent ? 'urgent' : 'normal'}`}>
+                            {isPast ? `${Math.abs(daysUntil)}d atrás` : daysUntil === 0 ? 'HOY' : `${daysUntil}d`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Elements Section */}
+                    <div className="mant-elements-section">
+                      <div className="mant-elements-label">
+                        <ClipboardList size={11} /> Elementos / Sub-tareas
+                      </div>
+                      <div className="mant-elements-grid">
+                        {taskElements.map((e: any) => (
+                          <div key={e.id} className="mant-elem-chip">
+                            <Check size={11} className="mant-elem-icon" style={{ color: cfg.accent }} />
+                            <span className="mant-elem-name">{e.nombre}</span>
+                            <button 
+                              className="mant-elem-delete"
+                              onClick={() => handleDelete('elementos_mantenimiento', e.id, e.nombre)}
+                            >
+                              <X size={10} />
+                            </button>
                           </div>
-                        </td>
-                        <td className="text-center"><span className="badge badge-secondary">{m.frecuencia?.toUpperCase()}</span></td>
-                        <td className="text-sm font-mono text-center">{m.proxima_fecha}</td>
-                        <td className="text-center"><button className="btn-icon btn-ghost text-danger" onClick={() => handleDelete('mantenimiento_preventivo', m.id, m.titulo)}><Trash2 size={16} /></button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        ))}
+                        {taskElements.length === 0 && (
+                          <span className="mant-no-elems">Sin elementos aún</span>
+                        )}
+                      </div>
+                      <div className="mant-add-elem">
+                        <Plus size={13} style={{ color: cfg.accent, opacity: 0.6 }} />
+                        <input 
+                          type="text" 
+                          className="mant-elem-input"
+                          placeholder="Añadir elemento (Enter para guardar)..."
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const input = e.target as HTMLInputElement;
+                              handleAddElemento(m.id, input.value)
+                              input.value = ''
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <style>{`
+              .mant-redesign { display: flex; flex-direction: column; gap: var(--spacing-lg); }
+              .mant-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; }
+              .mant-header-left { display: flex; align-items: center; gap: 1rem; }
+              .mant-icon-wrap {
+                width: 44px; height: 44px; border-radius: 12px;
+                background: linear-gradient(135deg, #06b6d4, #6366f1);
+                display: flex; align-items: center; justify-content: center;
+                color: white; box-shadow: 0 4px 15px rgba(6,182,212,0.3);
+              }
+              .mant-title { font-size: 1.15rem; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
+              .mant-subtitle { font-size: 0.75rem; color: var(--color-text-muted); margin-top: 2px; }
+
+              .mant-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: var(--spacing-lg); }
+
+              .mant-card {
+                padding: 0 !important; overflow: hidden;
+                border: 1px solid rgba(255,255,255,0.06);
+                transition: transform 0.3s cubic-bezier(.4,0,.2,1), box-shadow 0.3s ease;
+              }
+              .mant-card:hover {
+                transform: translateY(-4px);
+                box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.08);
+              }
+
+              .mant-card-header {
+                display: flex; justify-content: space-between; align-items: flex-start;
+                padding: 1.15rem 1.25rem; gap: 0.75rem;
+              }
+              .mant-card-identity { display: flex; align-items: flex-start; gap: 0.75rem; flex: 1; min-width: 0; }
+              .mant-card-avatar {
+                width: 38px; height: 38px; border-radius: 10px;
+                display: flex; align-items: center; justify-content: center;
+                flex-shrink: 0; transition: transform 0.25s ease;
+              }
+              .mant-card:hover .mant-card-avatar { transform: scale(1.1) rotate(5deg); }
+              .mant-card-name { font-weight: 700; font-size: 1rem; margin: 0; letter-spacing: -0.01em; line-height: 1.3; }
+              .mant-card-desc { font-size: 0.72rem; color: var(--color-text-muted); margin-top: 3px; line-height: 1.4; }
+              .mant-delete-btn {
+                width: 30px; height: 30px; border-radius: 8px; border: none; flex-shrink: 0;
+                background: rgba(239,68,68,0.08); color: rgba(239,68,68,0.5);
+                display: flex; align-items: center; justify-content: center;
+                cursor: pointer; transition: all 0.2s ease;
+              }
+              .mant-delete-btn:hover { background: rgba(239,68,68,0.2); color: #ef4444; transform: scale(1.1); }
+
+              .mant-info-bar {
+                display: flex; justify-content: space-between; align-items: center;
+                padding: 0.65rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.04);
+                border-bottom: 1px solid rgba(255,255,255,0.04);
+                background: rgba(0,0,0,0.08);
+              }
+              .mant-info-item { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--color-text-muted); }
+              .mant-freq-badge {
+                padding: 2px 9px; border-radius: 999px;
+                font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em;
+              }
+              .mant-date-text { font-weight: 500; }
+              .mant-countdown {
+                padding: 1px 7px; border-radius: 6px; font-size: 0.62rem; font-weight: 800;
+              }
+              .mant-countdown.normal { background: rgba(99,102,241,0.15); color: #818cf8; }
+              .mant-countdown.urgent { background: rgba(245,158,11,0.2); color: #f59e0b; animation: pulse-glow 2s infinite; }
+              .mant-countdown.past { background: rgba(239,68,68,0.2); color: #ef4444; animation: pulse-glow 1.5s infinite; }
+              @keyframes pulse-glow { 0%,100%{ opacity:1; } 50%{ opacity:0.6; } }
+              .mant-overdue .mant-date-text { color: #ef4444; }
+              .mant-urgent .mant-date-text { color: #f59e0b; }
+
+              .mant-elements-section { padding: 0.85rem 1.25rem 1.15rem; }
+              .mant-elements-label {
+                display: flex; align-items: center; gap: 5px;
+                font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+                letter-spacing: 0.08em; color: var(--color-text-muted);
+                margin-bottom: 0.6rem;
+              }
+              .mant-elements-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 0.6rem; }
+
+              .mant-elem-chip {
+                display: flex; align-items: center; gap: 5px;
+                padding: 5px 7px 5px 9px;
+                background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 8px; font-size: 0.76rem; font-weight: 500;
+                transition: all 0.2s ease;
+              }
+              .mant-elem-chip:hover {
+                background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15);
+                transform: translateY(-1px);
+              }
+              .mant-elem-icon { flex-shrink: 0; }
+              .mant-elem-name { white-space: nowrap; }
+              .mant-elem-delete {
+                width: 16px; height: 16px; border-radius: 50%;
+                border: none; background: transparent; color: rgba(255,255,255,0.2);
+                display: flex; align-items: center; justify-content: center;
+                cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;
+              }
+              .mant-elem-chip:hover .mant-elem-delete { color: #ef4444; background: rgba(239,68,68,0.1); }
+              .mant-elem-delete:hover { background: rgba(239,68,68,0.25) !important; transform: scale(1.15); }
+              .mant-no-elems { font-size: 0.72rem; color: var(--color-text-muted); font-style: italic; opacity: 0.6; }
+
+              .mant-add-elem {
+                display: flex; align-items: center; gap: 6px;
+                padding: 5px 10px; border-radius: 8px;
+                border: 1px dashed rgba(255,255,255,0.1);
+                background: rgba(255,255,255,0.02);
+                transition: border-color 0.2s;
+              }
+              .mant-add-elem:focus-within { border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.04); }
+              .mant-elem-input {
+                flex: 1; border: none; background: transparent;
+                font-size: 0.75rem; color: var(--color-text);
+                outline: none; padding: 2px 0;
+              }
+              .mant-elem-input::placeholder { color: var(--color-text-muted); opacity: 0.5; }
+
+              @media (max-width: 640px) {
+                .mant-grid { grid-template-columns: 1fr; }
+                .mant-header { flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+              }
+            `}</style>
+          </div>
+          )
+        })()}
+
+        {/* Plantillas Tab Content */}
+        {activeTab === 'plantillas' && (
+          <div className="mant-redesign animate-fade-in">
+            <div className="mant-header">
+              <div className="mant-header-left">
+                <div className="mant-icon-wrap" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                  <FileText size={24} />
+                </div>
+                <div>
+                  <h2 className="mant-title">Plantillas de Checklist</h2>
+                  <p className="mant-subtitle">Define puntos de inspección estándar para tus activos</p>
+                </div>
               </div>
+              <button 
+                className="btn btn-primary"
+                onClick={() => setIsAddingPlantilla(true)}
+              >
+                <Plus size={18} />
+                <span>Nueva Plantilla</span>
+              </button>
+            </div>
+
+            {isAddingPlantilla && (
+              <div className="glass-card mb-xl p-xl animate-scale-in border-accent/20">
+                <div className="flex justify-between items-center mb-lg">
+                  <h3 className="text-xl font-bold flex items-center gap-md">
+                    <FileText className="text-accent" /> Configurar Plantilla
+                  </h3>
+                  <button onClick={() => setIsAddingPlantilla(false)} className="text-muted hover:text-white">
+                    <X size={20} />
+                  </button>
+                </div>
+                <form onSubmit={handleAddPlantilla} className="grid grid-cols-1 gap-lg">
+                  <div className="input-field">
+                    <label>Nombre de la Plantilla (ej: Aire Acondicionado)</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={newPlantilla.nombre}
+                      onChange={e => setNewPlantilla({...newPlantilla, nombre: e.target.value})}
+                      placeholder="Nombre descriptivo..."
+                    />
+                  </div>
+
+                  <div className="bg-white/5 p-lg rounded-xl border border-white/10">
+                    <label className="text-sm font-bold uppercase tracking-wider text-muted opacity-80 mb-md block">
+                      Puntos de Inspección
+                    </label>
+                    <div className="flex flex-wrap gap-md mb-lg">
+                      {newPlantilla.items.map((item, idx) => (
+                        <div key={idx} className="mant-elem-chip">
+                          <Check size={12} className="text-accent" />
+                          <span>{item}</span>
+                          <button 
+                            type="button"
+                            onClick={() => setNewPlantilla({
+                              ...newPlantilla, 
+                              items: newPlantilla.items.filter((_, i) => i !== idx)
+                            })}
+                            className="text-muted hover:text-danger ml-xs"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                      {newPlantilla.items.length === 0 && (
+                        <span className="text-sm italic text-muted">Aún no has añadido puntos a esta plantilla</span>
+                      )}
+                    </div>
+                    <div className="flex gap-md">
+                      <input 
+                        type="text" 
+                        value={newPlantillaItem}
+                        onChange={e => setNewPlantillaItem(e.target.value)}
+                        placeholder="ej: Revisar nivel de gas refrigerante"
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (newPlantillaItem.trim()) {
+                              setNewPlantilla({...newPlantilla, items: [...newPlantilla.items, newPlantillaItem.trim()]})
+                              setNewPlantillaItem('')
+                            }
+                          }
+                        }}
+                        className="flex-1 bg-black/40 border-white/10 rounded-lg p-md text-sm"
+                      />
+                      <button 
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          if (newPlantillaItem.trim()) {
+                            setNewPlantilla({...newPlantilla, items: [...newPlantilla.items, newPlantillaItem.trim()]})
+                            setNewPlantillaItem('')
+                          }
+                        }}
+                      >
+                        Añadir
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-md pt-md">
+                    <button type="button" onClick={() => setIsAddingPlantilla(false)} className="btn btn-secondary">Cancelar</button>
+                    <button type="submit" className="btn btn-primary">Guardar Plantilla</button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            <div className="mant-grid">
+              {plantillas.map(p => (
+                <div key={p.id} className="glass-card mant-card">
+                  <div className="mant-card-header">
+                    <div className="mant-card-identity">
+                      <div className="mant-card-avatar" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>
+                        <FileText size={18} />
+                      </div>
+                      <div>
+                        <h4 className="mant-card-name">{p.nombre}</h4>
+                        <p className="mant-card-desc">{p.items?.length || 0} puntos de revisión</p>
+                      </div>
+                    </div>
+                    <button 
+                      className="mant-delete-btn"
+                      onClick={() => handleDelete('mantenimiento_plantillas', p.id, p.nombre)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <div className="p-lg pt-none">
+                    <div className="flex flex-wrap gap-xs">
+                      {p.items?.slice(0, 5).map((item, i) => (
+                        <span key={i} className="text-[10px] bg-white/5 border border-white/10 px-xs py-[2px] rounded text-muted">
+                          {item}
+                        </span>
+                      ))}
+                      {p.items?.length > 5 && (
+                        <span className="text-[10px] text-accent">+{p.items.length - 5} más</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {plantillas.length === 0 && !isAddingPlantilla && (
+                <div className="col-span-full py-xl text-center glass-card opacity-60">
+                  <FileText size={48} className="mx-auto mb-lg text-muted op-40" />
+                  <p>No hay plantillas creadas. Crea una para agilizar tus checklists.</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1132,6 +1831,19 @@ export default function Configuracion() {
                     <label className="input-label">Primera Fecha</label>
                     <input type="date" className="input" value={newMantenimiento.proxima_fecha} onChange={e => setNewMantenimiento({...newMantenimiento, proxima_fecha: e.target.value})} required />
                   </div>
+                </div>
+                <div className="input-group mt-md">
+                  <label className="input-label">Usar Plantilla de Checklist (Opcional)</label>
+                  <select 
+                    className="select" 
+                    value={newMantenimiento.plantillaId} 
+                    onChange={e => setNewMantenimiento({...newMantenimiento, plantillaId: e.target.value})}
+                  >
+                    <option value="">-- Sin Plantilla (Checklist Vacío) --</option>
+                    {plantillas.map(p => (
+                      <option key={p.id} value={p.id}>{p.nombre} ({p.items?.length || 0} pasos)</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="modal-footer"><button type="submit" className="btn btn-primary">Guardar Tarea</button></div>
