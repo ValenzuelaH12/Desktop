@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Plus, Filter, Search, MoreVertical, MapPin, Clock, X, CheckCircle, Image as ImageIcon, Video, Paperclip, MessageSquare, History, AlertCircle, RefreshCw, Download, FileText, FileSpreadsheet, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -14,7 +14,8 @@ export default function Incidencias() {
   const toast = useToast()
   const [activeTab, setActiveTab] = useState('activas')
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [newIncident, setNewIncident] = useState({ title: '', location: '', priority: 'medium', room: '', descripcion: '', media_urls: [] })
+  const location = useLocation()
+  const [newIncident, setNewIncident] = useState({ title: '', location: '', priority: 'medium', room: '', descripcion: '', media_urls: [], activo_id: null })
   const [incidents, setIncidents] = useState([])
   const [zonas, setZonas] = useState([])
   const [habitaciones, setHabitaciones] = useState([])
@@ -46,6 +47,19 @@ export default function Incidencias() {
       supabase.removeChannel(channel)
     }
   }, [])
+
+  useEffect(() => {
+    if (location.state?.prefillAsset) {
+      setNewIncident(prev => ({
+        ...prev,
+        activo_id: location.state.prefillAsset,
+        location: location.state.prefillLocation || prev.location
+      }))
+      setIsModalOpen(true)
+      // Limpiar el estado para que no se reabra si el usuario recarga la página
+      window.history.replaceState({}, document.title)
+    }
+  }, [location.state])
 
   const fetchMetadata = async () => {
     try {
@@ -127,7 +141,8 @@ export default function Incidencias() {
           status: 'pendiente',
           descripcion: newIncident.descripcion || '',
           media_urls: newIncident.media_urls || [],
-          reporter_id: user.id
+          reporter_id: user.id,
+          activo_id: newIncident.activo_id
         }])
         .select()
         .single()
@@ -147,7 +162,7 @@ export default function Incidencias() {
       toast.success('Incidencia reportada correctamente')
       fetchIncidents()
       setIsModalOpen(false)
-      setNewIncident({ title: '', location: '', priority: 'medium', room: '', descripcion: '', media_urls: [] })
+      setNewIncident({ title: '', location: '', priority: 'medium', room: '', descripcion: '', media_urls: [], activo_id: null })
     } catch (error: any) {
       console.error('Error creating incident:', error)
       
@@ -164,13 +179,14 @@ export default function Incidencias() {
             descripcion: newIncident.descripcion || '',
             media_urls: newIncident.media_urls || [],
             reporter_id: user.id,
+            activo_id: newIncident.activo_id,
             created_at: new Date().toISOString()
           },
           timestamp: Date.now()
         })
         toast.info('Modo Offline: El reporte se sincronizará al recuperar la conexión.')
         setIsModalOpen(false)
-        setNewIncident({ title: '', location: '', priority: 'medium', room: '', descripcion: '', media_urls: [] })
+        setNewIncident({ title: '', location: '', priority: 'medium', room: '', descripcion: '', media_urls: [], activo_id: null })
       } catch (dbError) {
         toast.error('Error crítico al guardar datos locales.')
       }
