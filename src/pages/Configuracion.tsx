@@ -591,7 +591,16 @@ export default function Configuracion() {
                         <td>
                           <div className="flex flex-wrap gap-xs">
                             {habitaciones.filter(h => h.zona_id === z.id).map(h => (
-                              <span key={h.id} className="badge badge-secondary text-xs">{h.nombre}</span>
+                              <span key={h.id} className="badge badge-secondary text-xs flex items-center gap-xs">
+                                {h.nombre}
+                                <button 
+                                  className="btn-icon btn-ghost p-none text-danger h-auto w-auto hover:bg-danger/10 rounded-full" 
+                                  onClick={() => handleDelete('habitaciones', h.id, `Habitación ${h.nombre}`)}
+                                  title="Borrar habitación"
+                                >
+                                  <X size={10} />
+                                </button>
+                              </span>
                             ))}
                             <button className="btn btn-ghost btn-xs text-accent" onClick={() => { setSelectedZona(z); setNewHabitacion({...newHabitacion, zona_id: z.id}); setIsAddingHabitacion(true); }}>
                               <Plus size={12} /> Hab.
