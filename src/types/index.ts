@@ -76,3 +76,23 @@ export interface Counter {
   nombre: string;
   tipo: 'luz' | 'agua' | 'gas' | 'otros';
 }
+
+export interface ActivityLogEvent {
+  id: string;
+  usuario_id: string;
+  accion: string;
+  detalles: any;
+  created_at: string;
+  perfiles?: {
+    nombre: string;
+    rol: string;
+  };
+}
+
+export interface GlobalSettings {
+  hotel_name: string;
+  currency: string;
+  timezone: string;
+  logo_url?: string | null;
+  welcome_message: string;
+}

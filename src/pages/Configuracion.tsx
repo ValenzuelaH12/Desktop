@@ -11,6 +11,7 @@ import { ZoneManager } from '../components/features/config/ZoneManager';
 import { MeterManager } from '../components/features/config/MeterManager';
 import { MaintenanceManager } from '../components/features/config/MaintenanceManager';
 import { NexusConfig } from '../components/features/config/NexusConfig';
+import { SettingsManager } from '../components/features/config/SettingsManager';
 import { configService as configApi } from '../services/configService';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -187,14 +188,7 @@ export default function Configuracion() {
           )}
 
           {activeTab === 'ajustes' && (
-            <Card className="p-xl text-center">
-              <div className="bg-accent/10 w-fit p-lg rounded-full mx-auto mb-lg">
-                <Settings size={48} className="text-accent" />
-              </div>
-              <h2 className="text-xl font-bold mb-sm">Ajustes Globales</h2>
-              <p className="text-muted mb-xl">Panel de administración general del hotel y preferencias del sistema.</p>
-              <Button variant="secondary" size="lg">Próximamente</Button>
-            </Card>
+            <SettingsManager onMessage={showMsg} />
           )}
         </main>
       </div>
