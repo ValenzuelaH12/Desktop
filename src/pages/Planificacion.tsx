@@ -18,7 +18,10 @@ import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
 
 moment.locale('es')
 const localizer = momentLocalizer(moment)
-const DnDCalendar = withDragAndDrop(Calendar)
+
+// Fix for Vite/ESM double default export issue
+const dndHOC = (withDragAndDrop as any).default || withDragAndDrop
+const DnDCalendar = dndHOC(Calendar)
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
