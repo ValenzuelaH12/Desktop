@@ -14,6 +14,7 @@ import {
   Calendar
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import jsPDF from 'jspdf'
 import { 
   Chart as ChartJS, 
@@ -44,6 +45,7 @@ ChartJS.register(
 )
 
 export default function VInsights() {
+  const { activeHotelId } = useAuth()
   const [isExporting, setIsExporting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [timeRange, setTimeRange] = useState('30') // días
@@ -59,7 +61,7 @@ export default function VInsights() {
 
   useEffect(() => {
     fetchInsightsData()
-  }, [timeRange])
+  }, [timeRange, activeHotelId])
 
   const fetchInsightsData = async () => {
     setLoading(true)
@@ -69,11 +71,13 @@ export default function VInsights() {
       const startDateISO = startDate.toISOString()
 
       // 1. Fetch Incidents for Heatmap and MTTR
-      // Simplificamos la consulta para evitar errores de sintaxis y RLS
-      const { data: incidents, error: incError } = await supabase
+      let qInc = supabase
         .from('incidencias')
-        .select('id, title, location, status, created_at')
+        .select('id, title, location, status, created_at, resolved_at')
         .gte('created_at', startDateISO)
+      if (activeHotelId) qInc = qInc.eq('hotel_id', activeHotelId)
+      
+      const { data: incidents, error: incError } = await qInc
 
       if (incError) throw incError
 
@@ -110,8 +114,10 @@ export default function VInsights() {
       )
 
       const resolutionTimes = resolvedIncidents.map(inc => {
-        // Fallback to 0 since we don't have a resolution timestamp yet
-        return 0 
+        if (!inc.resolved_at || !inc.created_at) return 0
+        const start = new Date(inc.created_at).getTime()
+        const end = new Date(inc.resolved_at).getTime()
+        return (end - start) / (1000 * 60 * 60) // horas
       })
 
       const mttrRanges = {
@@ -142,11 +148,14 @@ export default function VInsights() {
       })
 
       // 2. Fetch Consumption Trends
-      const { data: readings, error: readError } = await supabase
+      let qRead = supabase
         .from('lecturas')
         .select('valor, fecha, contador_id, contadores(tipo)')
         .gte('fecha', startDateISO.split('T')[0])
         .order('fecha', { ascending: true })
+      if (activeHotelId) qRead = qRead.eq('hotel_id', activeHotelId)
+
+      const { data: readings, error: readError } = await qRead
 
       if (readError) throw readError
 

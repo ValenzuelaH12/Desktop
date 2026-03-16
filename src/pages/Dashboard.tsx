@@ -18,6 +18,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Line } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js'
+import { incidentService } from '../services/incidentService'
+import { inventoryService } from '../services/inventoryService'
 import jsPDF from 'jspdf'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
@@ -35,84 +37,59 @@ export default function Dashboard() {
   })
   const [isGenerating, setIsGenerating] = useState(false)
   const [myTasks, setMyTasks] = useState([])
-  const [readingTrends, setReadingTrends] = useState([])
-  const { user } = useAuth()
+  const [readingTrends, setReadingTrends] = useState<any>({})
+  const { user, activeHotelId } = useAuth()
 
   useEffect(() => {
     fetchDashboardData()
-  }, [])
+  }, [activeHotelId])
 
   const fetchDashboardData = async () => {
     setLoading(true)
     try {
       const today = new Date().toISOString().split('T')[0]
       
-      // 1. Incidencias activas (pending / in-progress)
-      const { count: activeIncidents } = await supabase
-        .from('incidencias')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['pending', 'in-progress'])
+      // Use incidentService for stats
+      const activeIncidents = (await incidentService.getActive(activeHotelId)).length
+      const resolvedToday = await incidentService.getResolvedToday(activeHotelId)
 
-      // 2. Resueltas hoy
-      const { count: resolvedToday } = await supabase
-        .from('incidencias')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'resolved')
-        .gte('created_at', today)
+      // 3. Mantenimientos para hoy (Keep direct for now or until service is ready)
+      let q3 = supabase.from('mantenimiento_preventivo').select('*', { count: 'exact', head: true }).lte('proxima_fecha', today)
+      if (activeHotelId) q3 = q3.eq('hotel_id', activeHotelId)
+      const { count: pendingMantenimiento } = await q3
 
-      // 3. Mantenimientos para hoy
-      const { count: pendingMantenimiento } = await supabase
-        .from('mantenimiento_preventivo')
-        .select('*', { count: 'exact', head: true })
-        .lte('proxima_fecha', today)
-
-      // 4. Mensajes sin leer (simulado o real si existe la columna read)
-      const { count: unreadMessages } = await supabase
-        .from('mensajes')
-        .select('*', { count: 'exact', head: true })
-        .eq('read', false)
+      // 4. Mensajes sin leer
+      let q4 = supabase.from('mensajes').select('*', { count: 'exact', head: true }).eq('read', false)
+      if (activeHotelId) q4 = q4.eq('hotel_id', activeHotelId)
+      const { count: unreadMessages } = await q4
 
       setStats([
         { id: 1, title: 'Incidencias Activas', value: activeIncidents || 0, icon: AlertTriangle, color: 'danger' },
         { id: 2, title: 'Resueltas Hoy', value: resolvedToday || 0, icon: CheckCircle, color: 'success' },
-        { id: 3, title: 'Tiempo de Resolución', value: '4.2h', icon: Clock, color: 'info' }, // Real calculation below
+        { id: 3, title: 'Tiempo de Resolución', value: '0.0h', icon: Clock, color: 'info' },
         { id: 4, title: 'Mensajes Sin Leer', value: unreadMessages || 0, icon: MessageSquare, color: 'accent' },
       ])
 
-      // Cálculo de Tiempo Medio de Resolución (MTTR) - Simulado con datos reales si existen
-      const { data: resolvedMsgs } = await supabase
-        .from('incidencias')
-        .select('created_at')
-        .eq('status', 'resolved')
-        .limit(20)
-      
-      if (resolvedMsgs && resolvedMsgs.length > 0) {
-        // Como no existe updated_at, el tiempo de resolución real no se puede calcular aún.
-        // Mostramos 0.0h o una estimación fija.
-        const avg = "0.0"
-        setStats(prev => prev.map(s => s.id === 3 ? { ...s, value: `${avg}h` } : s))
-      }
+      // Incidencias recientes using service
+      const incidents = await incidentService.getAll(activeHotelId)
+      setRecentIncidents(incidents.slice(0, 5) || [])
 
-      // Incidencias recientes
-      const { data: incidents } = await supabase
-        .from('incidencias')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5)
-      
-      setRecentIncidents(incidents || [])
-
-      // 5. Mis tareas pendientes
-      const { data: myIncs } = await supabase
+      // 5. Mis tareas pendientes (still need user filter)
+      let qMy = supabase
         .from('incidencias')
         .select('*')
         .eq('assigned_to', user?.id)
-        .neq('status', 'resuelto')
+        .neq('status', 'resolved')
         .limit(5)
+      if (activeHotelId) qMy = qMy.eq('hotel_id', activeHotelId)
+      const { data: myIncs } = await qMy
       setMyTasks(myIncs || [])
 
-      // 6. Tendencias de lecturas (todos los tipos)
-      const { data: allContadores } = await supabase.from('contadores').select('id, tipo, nombre')
+      // 6. Tendencias de lecturas
+      let qCont = supabase.from('contadores').select('id, tipo, nombre')
+      if (activeHotelId) qCont = qCont.eq('hotel_id', activeHotelId)
+      const { data: allContadores } = await qCont
+      
       if (allContadores && allContadores.length > 0) {
         const trendData = {}
         for (const c of allContadores) {
@@ -120,6 +97,7 @@ export default function Dashboard() {
             .from('lecturas')
             .select('valor, fecha')
             .eq('contador_id', c.id)
+            .eq('hotel_id', activeHotelId)
             .order('fecha', { ascending: false })
             .limit(10)
           if (readings && readings.length > 1) {
@@ -141,32 +119,27 @@ export default function Dashboard() {
     }
   }
 
+
   const generateProReport = async () => {
     setIsGenerating(true)
     try {
       const { start, end } = reportDates
       
       // 1. Incidencias en el periodo
-      const { data: incs } = await supabase
-        .from('incidencias')
-        .select('*')
-        .gte('created_at', start)
-        .lte('created_at', end + 'T23:59:59')
+      let qInc = supabase.from('incidencias').select('*').gte('created_at', start).lte('created_at', end + 'T23:59:59')
+      if (activeHotelId) qInc = qInc.eq('hotel_id', activeHotelId)
+      const { data: incs } = await qInc
 
       // 2. Mantenimiento en el periodo
-      const { data: maintenance } = await supabase
-        .from('historial_mantenimiento')
-        .select('*, tarea:tarea_id(titulo)')
-        .gte('completado_el', start)
-        .lte('completado_el', end + 'T23:59:59')
+      let qMant = supabase.from('historial_mantenimiento').select('*, tarea:tarea_id(titulo)').gte('completado_el', start).lte('completado_el', end + 'T23:59:59')
+      if (activeHotelId) qMant = qMant.eq('hotel_id', activeHotelId)
+      const { data: maintenance } = await qMant
 
       // 3. Consumos (Agregado básico para el reporte)
-      const { data: readings } = await supabase
-        .from('lecturas')
-        .select('*, contador:contador_id(nombre, tipo)')
-        .gte('fecha', start)
-        .lte('fecha', end)
-        .order('fecha', { ascending: true })
+      let qRead = supabase.from('lecturas').select('*, contador:contador_id(nombre, tipo)').gte('fecha', start).lte('fecha', end).order('fecha', { ascending: true })
+      // Assuming lecturas table has hotel_id, otherwise we filter by counters
+      if (activeHotelId) qRead = qRead.eq('hotel_id', activeHotelId)
+      const { data: readings } = await qRead
 
       // Procesar consumos por tipo
       const consumos = readings?.reduce((acc, curr, idx, arr) => {
@@ -770,17 +743,14 @@ export default function Dashboard() {
 
 function InventoryAlerts() {
   const [lowStock, setLowStock] = useState([])
+  const { activeHotelId } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
-    supabase.from('inventario')
-      .select('*')
-      .lte('stock_actual', 'stock_minimo' as any) // Esto no funciona así en Supabase, lo filtramos después
-      .limit(3)
-      .then(({ data }) => {
-        if (data) setLowStock(data.filter(i => i.stock_actual <= i.stock_minimo))
-      })
-  }, [])
+    inventoryService.getAll(activeHotelId).then((data) => {
+      if (data) setLowStock(data.filter(i => i.stock_actual <= i.stock_minimo).slice(0, 3))
+    })
+  }, [activeHotelId])
 
   if (lowStock.length === 0) return <p className="text-xs text-muted italic">Todo en orden con el stock.</p>
 

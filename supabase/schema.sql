@@ -2,7 +2,7 @@
 create table if not exists public.perfiles (
   id uuid references auth.users on delete cascade not null primary key,
   nombre text not null,
-  rol text not null check (rol in ('admin', 'recepcion', 'mantenimiento', 'limpieza', 'direccion')),
+  rol text not null check (rol in ('super_admin', 'admin', 'recepcion', 'mantenimiento', 'limpieza', 'direccion')),
   hotel text not null,
   permisos text[] default array['dashboard', 'incidencias', 'chat']::text[],
   created_at timestamp with time zone default timezone('utc'::text, now()) not null

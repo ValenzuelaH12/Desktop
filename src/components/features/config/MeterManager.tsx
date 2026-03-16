@@ -11,12 +11,14 @@ interface MeterManagerProps {
   counters: Counter[];
   onMessage: (msg: { type: 'success' | 'error', text: string }) => void;
   onRefresh: () => void;
+  activeHotelId: string | null;
 }
 
 export const MeterManager: React.FC<MeterManagerProps> = ({ 
   counters, 
   onMessage,
-  onRefresh
+  onRefresh,
+  activeHotelId
 }) => {
   const [isAddingMeter, setIsAddingMeter] = useState(false);
   const [isEditingMeter, setIsEditingMeter] = useState(false);
@@ -24,16 +26,24 @@ export const MeterManager: React.FC<MeterManagerProps> = ({
   
   const [newMeter, setNewMeter] = useState({
     nombre: '',
-    tipo: 'luz' as Counter['tipo']
+    tipo: 'luz' as Counter['tipo'],
+    hotel_id: activeHotelId || ''
   });
+
+  // Sync hotel_id when activeHotelId changes
+  React.useEffect(() => {
+    if (activeHotelId) {
+      setNewMeter(prev => ({ ...prev, hotel_id: activeHotelId }));
+    }
+  }, [activeHotelId]);
 
   const handleAddMeter = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await configService.create('contadores', newMeter);
+      await configService.create('contadores', { ...newMeter, hotel_id: activeHotelId });
       onMessage({ type: 'success', text: 'Contador creado exitosamente.' });
       setIsAddingMeter(false);
-      setNewMeter({ nombre: '', tipo: 'luz' });
+      setNewMeter({ nombre: '', tipo: 'luz', hotel_id: activeHotelId || '' });
       onRefresh();
     } catch (error: any) {
       onMessage({ type: 'error', text: `Error al crear contador: ${error.message}` });

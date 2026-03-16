@@ -2,11 +2,10 @@ import { supabase } from '../lib/supabase';
 import { InventoryItem } from '../types';
 
 export const inventoryService = {
-  async getAll(): Promise<InventoryItem[]> {
-    const { data, error } = await supabase
-      .from('inventario')
-      .select('*')
-      .order('nombre', { ascending: true });
+  async getAll(hotelId?: string | null): Promise<InventoryItem[]> {
+    let query = supabase.from('inventario').select('*').order('nombre', { ascending: true });
+    if (hotelId) query = query.eq('hotel_id', hotelId);
+    const { data, error } = await query;
 
     if (error) throw error;
     return data || [];
@@ -25,13 +24,18 @@ export const inventoryService = {
     if (error) throw error;
   },
 
-  async create(item: Partial<InventoryItem>, profileId: string): Promise<InventoryItem> {
+  async create(item: Partial<InventoryItem>, profileId: string, hotelId?: string | null): Promise<InventoryItem> {
+    const payload = {
+      ...item,
+      actualizado_por: profileId
+    };
+    if (hotelId) {
+      (payload as any).hotel_id = hotelId;
+    }
+
     const { data, error } = await supabase
       .from('inventario')
-      .insert([{
-        ...item,
-        actualizado_por: profileId
-      }])
+      .insert([payload])
       .select()
       .single();
 

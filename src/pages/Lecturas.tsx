@@ -6,7 +6,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 export default function Lecturas() {
-  const { profile } = useAuth()
+  const { profile, activeHotelId } = useAuth()
   const [lecturas, setLecturas] = useState([])
   const [contadores, setContadores] = useState([])
   const [loading, setLoading] = useState(true)
@@ -25,7 +25,7 @@ export default function Lecturas() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [activeHotelId])
 
   const fetchData = async () => {
     setLoading(true)
@@ -35,10 +35,12 @@ export default function Lecturas() {
 
   const fetchContadores = async () => {
     try {
-      const { data, error } = await supabase.from('contadores').select('*').order('nombre')
+      let query = supabase.from('contadores').select('*').order('nombre')
+      if (activeHotelId) query = query.eq('hotel_id', activeHotelId)
+      const { data, error } = await query
       if (error) throw error
-      setContadores(data)
-      if (data.length > 0 && !newReading.contador_id) {
+      setContadores(data || [])
+      if (data && data.length > 0 && !newReading.contador_id) {
         setNewReading(prev => ({ ...prev, contador_id: data[0].id }))
       }
     } catch (error) { console.error('Error fetching meters:', error) }
@@ -46,7 +48,7 @@ export default function Lecturas() {
 
   const fetchLecturas = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('lecturas')
         .select(`
           *,
@@ -54,6 +56,10 @@ export default function Lecturas() {
           contadores (nombre, tipo)
         `)
         .order('fecha', { ascending: false })
+      
+      if (activeHotelId) query = query.eq('hotel_id', activeHotelId)
+
+      const { data, error } = await query
       
       if (error) throw error
       
@@ -64,7 +70,7 @@ export default function Lecturas() {
         return { ...curr, consumo }
       })
       
-      setLecturas(processed)
+      setLecturas(processed || [])
     } catch (error) {
       console.error('Error fetching readings:', error)
     }
@@ -120,14 +126,17 @@ export default function Lecturas() {
       }
 
       // 2. Insertar la lectura
+      const readPayload: any = {
+        ...newReading,
+        valor: valorNumerico,
+        creado_por: profile.id,
+        notas: isAnomaly ? `[AUTO-ALERTA] ${alertMsg}` : ''
+      }
+      if (activeHotelId) readPayload.hotel_id = activeHotelId;
+
       const { error: insertError } = await supabase
         .from('lecturas')
-        .insert([{
-          ...newReading,
-          valor: valorNumerico,
-          creado_por: profile.id,
-          notas: isAnomaly ? `[AUTO-ALERTA] ${alertMsg}` : ''
-        }])
+        .insert([readPayload])
 
       if (insertError) {
         if (insertError.code === '23505') throw new Error('Ya existe una lectura para este contador en la fecha seleccionada.')
@@ -136,14 +145,17 @@ export default function Lecturas() {
 
       // 3. Si hay anomalía, crear incidencia automática
       if (isAnomaly) {
-        await supabase.from('incidencias').insert([{
+        const anonPayload: any = {
           title: `[ALERTA CONSUMO] ${selectedContador.nombre}`,
           location: selectedContador.ubicacion || 'General',
           priority: 'high',
           status: 'pending',
           reporter_id: profile.id,
           descripcion: `Detección automática de consumo excesivo de ${selectedContador.tipo}. ${alertMsg}`
-        }])
+        }
+        if (activeHotelId) anonPayload.hotel_id = activeHotelId;
+
+        await supabase.from('incidencias').insert([anonPayload])
       }
 
       setMsg({ 
@@ -180,7 +192,12 @@ export default function Lecturas() {
   const handleDelete = async (id) => {
     if (!confirm('¿Seguro que quieres eliminar esta lectura?')) return
     try {
-      const { error } = await supabase.from('lecturas').delete().eq('id', id)
+      const { error } = await supabase
+        .from('lecturas')
+        .delete()
+        .eq('id', id)
+        .eq('hotel_id', activeHotelId)
+      
       if (error) throw error
       setMsg({ type: 'success', text: 'Lectura eliminada correctamente.' })
       fetchLecturas()
@@ -201,6 +218,7 @@ export default function Lecturas() {
           contador_id: editingReading.contador_id
         })
         .eq('id', editingReading.id)
+        .eq('hotel_id', activeHotelId)
       if (error) throw error
       setMsg({ type: 'success', text: 'Lectura actualizada correctamente.' })
       setEditingReading(null)

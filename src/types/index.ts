@@ -1,11 +1,21 @@
-export type UserRole = 'admin' | 'direccion' | 'mantenimiento' | 'recepcion' | 'limpieza' | 'gobernanta';
+export type UserRole = 'super_admin' | 'admin' | 'direccion' | 'mantenimiento' | 'recepcion' | 'limpieza' | 'gobernanta';
+
+export interface Hotel {
+  id: string;
+  nombre: string;
+  direccion?: string;
+  telefono?: string;
+  email?: string;
+  estado: 'activo' | 'inactivo';
+  created_at: string;
+}
 
 export interface Profile {
   id: string;
   nombre: string;
   email: string;
   rol: UserRole;
-  hotel: string;
+  hotel_id: string;
   avatar_url?: string;
   permisos: string[];
 }
@@ -17,17 +27,22 @@ export interface Incident {
   id: string;
   title: string;
   description?: string;
+  descripcion?: string; // Legacy/Spanish name in DB
   location: string;
   status: IncidentStatus;
   priority: IncidentPriority;
   created_at: string;
   created_by?: string;
+  reporter_id?: string;
   assigned_to?: string;
   image_url?: string;
+  media_urls?: string[];
   zona_id?: string;
   habitacion_id?: string;
   category?: string;
   asset_id?: string;
+  activo_id?: string;
+  hotel_id?: string;
 }
 
 export interface InventoryItem {
@@ -39,6 +54,7 @@ export interface InventoryItem {
   unidad: string;
   ultima_actualizacion?: string;
   actualizado_por?: string;
+  hotel_id?: string;
 }
 
 export interface Zone {

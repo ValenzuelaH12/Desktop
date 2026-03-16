@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layers, MapPin, Calendar, DoorOpen, Plus, Trash2, Hash, X } from 'lucide-react';
 import { configService } from '../../../services/configService';
 import { Zone, Room } from '../../../types';
@@ -10,27 +10,37 @@ interface ZoneManagerProps {
   rooms: Room[];
   onMessage: (msg: { type: 'success' | 'error', text: string }) => void;
   onRefresh: () => void;
+  activeHotelId: string | null;
 }
 
 export const ZoneManager: React.FC<ZoneManagerProps> = ({ 
   zones, 
   rooms, 
   onMessage,
-  onRefresh
+  onRefresh,
+  activeHotelId
 }) => {
   const [isAddingZone, setIsAddingZone] = useState(false);
   const [isAddingRoom, setIsAddingRoom] = useState(false);
-  const [newZone, setNewZone] = useState({ nombre: '' });
-  const [newRoom, setNewRoom] = useState({ nombre: '', zona_id: '' });
+  const [newZone, setNewZone] = useState({ nombre: '', hotel_id: activeHotelId || '' });
+  const [newRoom, setNewRoom] = useState({ nombre: '', zona_id: '', hotel_id: activeHotelId || '' });
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
+
+  // Sync hotel_id when activeHotelId changes
+  useEffect(() => {
+    if (activeHotelId) {
+      setNewZone(prev => ({ ...prev, hotel_id: activeHotelId }));
+      setNewRoom(prev => ({ ...prev, hotel_id: activeHotelId }));
+    }
+  }, [activeHotelId]);
 
   const handleAddZone = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await configService.create('zonas', newZone);
+      await configService.create('zonas', { ...newZone, hotel_id: activeHotelId });
       onMessage({ type: 'success', text: 'Zona creada exitosamente.' });
       setIsAddingZone(false);
-      setNewZone({ nombre: '' });
+      setNewZone({ nombre: '', hotel_id: activeHotelId || '' });
       onRefresh();
     } catch (error: any) {
       onMessage({ type: 'error', text: `Error al crear zona: ${error.message}` });
@@ -40,10 +50,10 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({
   const handleAddRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await configService.create('habitaciones', newRoom);
+      await configService.create('habitaciones', { ...newRoom, hotel_id: activeHotelId });
       onMessage({ type: 'success', text: 'Habitación creada exitosamente.' });
       setIsAddingRoom(false);
-      setNewRoom({ nombre: '', zona_id: '' });
+      setNewRoom({ nombre: '', zona_id: '', hotel_id: activeHotelId || '' });
       onRefresh();
     } catch (error: any) {
       onMessage({ type: 'error', text: `Error al crear habitación: ${error.message}` });
@@ -170,7 +180,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({
               className="input" 
               placeholder="Ej. Planta 1, Cocinas, Exteriores..." 
               value={newZone.nombre} 
-              onChange={e => setNewZone({ nombre: e.target.value })} 
+              onChange={e => setNewZone({ nombre: e.target.value, hotel_id: activeHotelId || '' })} 
               required 
             />
           </div>

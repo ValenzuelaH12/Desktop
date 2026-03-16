@@ -10,14 +10,19 @@ import { Badge } from '../../ui/Badge';
 interface AssetManagerProps {
   zones: Zone[];
   onMessage: (msg: { type: 'success' | 'error', text: string }) => void;
+  activeHotelId: string | null;
+  assets: Asset[];
+  onRefresh: () => void;
 }
 
 export const AssetManager: React.FC<AssetManagerProps> = ({ 
   zones,
-  onMessage 
+  onMessage,
+  activeHotelId,
+  assets,
+  onRefresh
 }) => {
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isAddingAsset, setIsAddingAsset] = useState(false);
   
   const [newAsset, setNewAsset] = useState({
@@ -25,25 +30,16 @@ export const AssetManager: React.FC<AssetManagerProps> = ({
     tipo: 'maquinaria',
     zona_id: '',
     manual_url: '',
-    especificaciones: {}
+    especificaciones: {},
+    hotel_id: activeHotelId || ''
   });
 
-  const fetchAssets = async () => {
-    setLoading(true);
-    try {
-      const data = await configService.getAssets();
-      setAssets(data);
-    } catch (error) {
-      console.error(error);
-      onMessage({ type: 'error', text: 'Error al cargar activos' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Sync hotel_id when activeHotelId changes
   useEffect(() => {
-    fetchAssets();
-  }, []);
+    if (activeHotelId) {
+      setNewAsset(prev => ({ ...prev, hotel_id: activeHotelId }));
+    }
+  }, [activeHotelId]);
 
   const handleAddAsset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,11 +49,11 @@ export const AssetManager: React.FC<AssetManagerProps> = ({
     }
 
     try {
-      await configService.create('activos', newAsset);
+      await configService.create('activos', { ...newAsset, hotel_id: activeHotelId });
       onMessage({ type: 'success', text: 'Activo registrado correctamente.' });
       setIsAddingAsset(false);
-      setNewAsset({ nombre: '', tipo: 'maquinaria', zona_id: '', manual_url: '', especificaciones: {} });
-      fetchAssets();
+      setNewAsset({ nombre: '', tipo: 'maquinaria', zona_id: '', manual_url: '', especificaciones: {}, hotel_id: activeHotelId || '' });
+      onRefresh();
     } catch (error: any) {
       onMessage({ type: 'error', text: error.message });
     }
@@ -69,7 +65,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({
     try {
       await configService.delete('activos', id);
       onMessage({ type: 'success', text: 'Activo eliminado correctamente.' });
-      fetchAssets();
+      onRefresh();
     } catch (error: any) {
       onMessage({ type: 'error', text: error.message });
     }

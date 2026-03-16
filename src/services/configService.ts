@@ -3,66 +3,55 @@ import { Zone, Room, Asset, Counter, Profile } from '../types';
 
 export const configService = {
   // Profiles
-  async getUsers(): Promise<Profile[]> {
-    const { data, error } = await supabase
-      .from('perfiles')
-      .select('*')
-      .neq('id', '00000000-0000-0000-0000-000000000000')
-      .order('nombre');
-    
+  async getUsers(hotelId?: string | null): Promise<Profile[]> {
+    let query = supabase.from('perfiles').select('*').neq('id', '00000000-0000-0000-0000-000000000000').order('nombre');
+    if (hotelId) query = query.eq('hotel_id', hotelId);
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   },
 
   // Zones & Rooms
-  async getZones(): Promise<Zone[]> {
-    const { data, error } = await supabase
-      .from('zonas')
-      .select('*')
-      .order('nombre');
-    
+  async getZones(hotelId?: string | null): Promise<Zone[]> {
+    let query = supabase.from('zonas').select('*').order('nombre');
+    if (hotelId) query = query.eq('hotel_id', hotelId);
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   },
 
-  async getRooms(): Promise<Room[]> {
-    const { data, error } = await supabase
-      .from('habitaciones')
-      .select('*')
-      .order('nombre');
-    
+  async getRooms(hotelId?: string | null): Promise<Room[]> {
+    let query = supabase.from('habitaciones').select('*').order('nombre');
+    if (hotelId) query = query.eq('hotel_id', hotelId);
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   },
 
   // Assets
-  async getAssets(): Promise<Asset[]> {
-    const { data, error } = await supabase
-      .from('activos')
-      .select('*')
-      .order('nombre');
-    
+  async getAssets(hotelId?: string | null): Promise<Asset[]> {
+    let query = supabase.from('activos').select('*').order('nombre');
+    if (hotelId) query = query.eq('hotel_id', hotelId);
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   },
 
   // Counters
-  async getCounters(): Promise<Counter[]> {
-    const { data, error } = await supabase
-      .from('contadores')
-      .select('*')
-      .neq('id', '00000000-0000-0000-0000-000000000000')
-      .order('nombre');
-    
+  async getCounters(hotelId?: string | null): Promise<Counter[]> {
+    let query = supabase.from('contadores').select('*').neq('id', '00000000-0000-0000-0000-000000000000').order('nombre');
+    if (hotelId) query = query.eq('hotel_id', hotelId);
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   },
 
   // Generic Create/Update/Delete (can be expanded)
-  async create(table: string, entry: any): Promise<any> {
+  async create(table: string, entry: any, hotelId?: string | null): Promise<any> {
+    const payload = hotelId ? { ...entry, hotel_id: hotelId } : entry;
     const { data, error } = await supabase
       .from(table)
-      .insert([entry])
+      .insert([payload])
       .select()
       .single();
     

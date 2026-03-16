@@ -8,8 +8,10 @@ import { dbService } from '../lib/db'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
+import { incidentService } from '../services/incidentService'
+
 export default function Incidencias() {
-  const { user, profile } = useAuth()
+  const { user, profile, activeHotelId } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
   const [activeTab, setActiveTab] = useState('activas')
@@ -37,7 +39,8 @@ export default function Incidencias() {
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
-        table: 'incidencias' 
+        table: 'incidencias',
+        filter: activeHotelId ? `hotel_id=eq.${activeHotelId}` : undefined
       }, () => {
         fetchIncidents()
       })
@@ -46,7 +49,7 @@ export default function Incidencias() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [activeHotelId])
 
   useEffect(() => {
     if (location.state?.prefillAsset) {
@@ -56,19 +59,24 @@ export default function Incidencias() {
         location: location.state.prefillLocation || prev.location
       }))
       setIsModalOpen(true)
-      // Limpiar el estado para que no se reabra si el usuario recarga la página
       window.history.replaceState({}, document.title)
     }
   }, [location.state])
 
   const fetchMetadata = async () => {
     try {
-      const [zRes, tRes, hRes, sRes] = await Promise.all([
-        supabase.from('zonas').select('id, nombre'),
-        supabase.from('tipos_problemas').select('nombre'),
-        supabase.from('habitaciones').select('id, nombre, zona_id'),
-        supabase.from('perfiles').select('id, nombre, rol').in('rol', ['mantenimiento', 'limpieza', 'admin', 'direccion'])
-      ])
+      let zReq = supabase.from('zonas').select('id, nombre').order('nombre')
+      let tReq = supabase.from('tipos_problemas').select('nombre').order('nombre')
+      let hReq = supabase.from('habitaciones').select('id, nombre, zona_id').order('nombre')
+      let sReq = supabase.from('perfiles').select('id, nombre, rol').in('rol', ['mantenimiento', 'limpieza', 'admin', 'direccion']).order('nombre')
+
+      if (activeHotelId) {
+        zReq = zReq.eq('hotel_id', activeHotelId)
+        hReq = hReq.eq('hotel_id', activeHotelId)
+        sReq = sReq.eq('hotel_id', activeHotelId)
+      }
+
+      const [zRes, tRes, hRes, sRes] = await Promise.all([zReq, tReq, hReq, sReq])
       if (zRes.data) setZonas(zRes.data)
       if (tRes.data) setTipos(tRes.data)
       if (hRes.data) setHabitaciones(hRes.data)
@@ -78,38 +86,13 @@ export default function Incidencias() {
 
   const fetchIncidents = async () => {
     try {
-      // Cargar desde IndexedDB (caché offline avanzada)
-      const cached = await dbService.getAll('incidencias')
-      if (cached && cached.length > 0 && loading) {
-        setIncidents(cached)
-      }
-
-      const { data, error } = await supabase
-        .from('incidencias')
-        .select(`
-          *,
-          reporter:perfiles!reporter_id(nombre, rol)
-        `)
-        .order('created_at', { ascending: false })
-      
-      if (error) {
-        console.warn('Error fetching detailed incidents, falling back:', error)
-        const { data: basicData, error: basicError } = await supabase.from('incidencias').select('*').order('created_at', { ascending: false })
-        if (basicError) throw basicError
-        return setIncidents(basicData || [])
-      }
+      setLoading(true)
+      const data = await incidentService.getAll(activeHotelId)
       
       const formattedData = data.map(inc => ({
-        id: inc.id,
-        title: inc.title,
-        location: inc.location,
-        priority: inc.priority,
-        status: inc.status,
-        descripcion: inc.descripcion,
-        media_urls: inc.media_urls || [],
+        ...inc,
         time: new Date(inc.created_at).toLocaleDateString(),
-        reporter: `${inc.reporter?.nombre || 'Desconocido'} (${inc.reporter?.rol || ''})`,
-        assignee_id: inc.assigned_to,
+        reporter: staff.find(s => s.id === inc.reporter_id)?.nombre || 'Desconocido',
         assignee_name: staff.find(s => s.id === inc.assigned_to)?.nombre || 'Sin asignar'
       }))
       
@@ -122,6 +105,7 @@ export default function Incidencias() {
     }
   }
 
+
   const handleCreateIncident = async (e) => {
     e.preventDefault()
     if (!newIncident.title || !newIncident.location || !user) return
@@ -132,18 +116,21 @@ export default function Incidencias() {
       : newIncident.location
 
     try {
+      const payload: any = {
+        title: newIncident.title,
+        location: finalLocation,
+        priority: newIncident.priority,
+        status: 'pendiente',
+        descripcion: newIncident.descripcion || '',
+        media_urls: newIncident.media_urls || [],
+        reporter_id: user.id,
+        activo_id: newIncident.activo_id
+      }
+      if (activeHotelId) payload.hotel_id = activeHotelId;
+
       const { data: incidentData, error: incidentError } = await supabase
         .from('incidencias')
-        .insert([{
-          title: newIncident.title,
-          location: finalLocation,
-          priority: newIncident.priority,
-          status: 'pendiente',
-          descripcion: newIncident.descripcion || '',
-          media_urls: newIncident.media_urls || [],
-          reporter_id: user.id,
-          activo_id: newIncident.activo_id
-        }])
+        .insert([payload])
         .select()
         .single()
 
@@ -151,11 +138,14 @@ export default function Incidencias() {
       
       // Crear Canal de Chat automático para la incidencia
       if (incidentData) {
-        await supabase.from('canales').insert([{
+        const canalPayload: any = {
           id: `inc_${incidentData.id}`,
           nombre: `Incidencia: ${incidentData.title}`,
           descripcion: `Hilo de coordinación para el reporte #${incidentData.id} en ${finalLocation}`
-        }])
+        }
+        if (activeHotelId) canalPayload.hotel_id = activeHotelId;
+        
+        await supabase.from('canales').insert([canalPayload])
       }
 
       toast.success('Incidencia reportada correctamente')
@@ -167,20 +157,23 @@ export default function Incidencias() {
       
       // Soporte Offline: Cola de sincronización
       try {
+        const offlinePayload: any = {
+          title: newIncident.title,
+          location: finalLocation,
+          priority: newIncident.priority,
+          status: 'pendiente',
+          descripcion: newIncident.descripcion || '',
+          media_urls: newIncident.media_urls || [],
+          reporter_id: user.id,
+          activo_id: newIncident.activo_id,
+          created_at: new Date().toISOString()
+        }
+        if (activeHotelId) offlinePayload.hotel_id = activeHotelId;
+
         await dbService.addToSyncQueue({
           table: 'incidencias',
           action: 'insert',
-          data: {
-            title: newIncident.title,
-            location: finalLocation,
-            priority: newIncident.priority,
-            status: 'pendiente',
-            descripcion: newIncident.descripcion || '',
-            media_urls: newIncident.media_urls || [],
-            reporter_id: user.id,
-            activo_id: newIncident.activo_id,
-            created_at: new Date().toISOString()
-          },
+          data: offlinePayload,
           timestamp: Date.now()
         })
         toast.info('Modo Offline: El reporte se sincronizará al recuperar la conexión.')
@@ -239,10 +232,14 @@ export default function Incidencias() {
 
   const handleUpdateStatus = async (id, newStatus) => {
     try {
-      const { error } = await supabase
+      let query = supabase
         .from('incidencias')
         .update({ status: newStatus })
         .eq('id', id)
+      
+      if (activeHotelId) query = query.eq('hotel_id', activeHotelId)
+        
+      const { error } = await query
         
       if (error) throw error
       fetchIncidents()

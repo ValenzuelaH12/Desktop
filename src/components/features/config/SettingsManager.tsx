@@ -8,10 +8,27 @@ import { useAuth } from '../../../context/AuthContext';
 import { configService } from '../../../services/configService';
 
 interface SettingsManagerProps {
-  onMessage: (msg: { type: 'success' | 'error', text: string }) => void;
+  onMessage: (msg: { type: 'success' | 'error' | '', text: string }) => void;
+  activeHotelId: string | null;
 }
 
-export const SettingsManager: React.FC<SettingsManagerProps> = ({ onMessage }) => {
+const ROLES = [
+  { id: 'admin', name: 'Administrador' },
+  { id: 'direccion', name: 'Dirección' },
+  { id: 'mantenimiento', name: 'Mantenimiento' },
+  { id: 'recepcion', name: 'Recepción' },
+  { id: 'limpieza', name: 'Limpieza' },
+  { id: 'gobernanta', name: 'Gobernanta' }
+];
+
+const PRIORITIES = [
+  { id: 'low', name: 'Baja' },
+  { id: 'medium', name: 'Media' },
+  { id: 'high', name: 'Alta' },
+  { id: 'urgent', name: 'Urgente' }
+];
+
+export const SettingsManager: React.FC<SettingsManagerProps> = ({ onMessage, activeHotelId }) => {
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'perfil' | 'notificaciones' | 'textos' | 'auditoria'>('perfil');
   const [loading, setLoading] = useState(true);
@@ -27,37 +44,21 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onMessage }) =
   const [logs, setLogs] = useState<ActivityLogEvent[]>([]);
   const [zones, setZones] = useState<{id: string, nombre: string}[]>([]);
 
-  const ROLES = [
-    { id: 'admin', name: 'Administrador' },
-    { id: 'direccion', name: 'Dirección' },
-    { id: 'mantenimiento', name: 'Mantenimiento' },
-    { id: 'recepcion', name: 'Recepción' },
-    { id: 'limpieza', name: 'Limpieza' },
-    { id: 'gobernanta', name: 'Gobernanta' }
-  ];
-
-  const PRIORITIES = [
-    { id: 'low', name: 'Baja' },
-    { id: 'medium', name: 'Media' },
-    { id: 'high', name: 'Alta' },
-    { id: 'urgent', name: 'Urgente' }
-  ];
-
   useEffect(() => {
     fetchSettings();
-  }, []);
+  }, [activeHotelId]);
 
   useEffect(() => {
     if (activeTab === 'auditoria') {
       fetchLogs();
     }
-  }, [activeTab]);
+  }, [activeTab, activeHotelId]);
 
   const fetchSettings = async () => {
     try {
       setLoading(true);
       const [data, zonesData] = await Promise.all([
-        settingsService.getSettings(),
+        settingsService.getSettings(activeHotelId),
         configService.getZones()
       ]);
       
@@ -78,7 +79,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onMessage }) =
 
   const fetchLogs = async () => {
     try {
-      const data = await settingsService.getActivityLogs(50);
+      const data = await settingsService.getActivityLogs(50, activeHotelId);
       setLogs(data);
     } catch (error) {
       console.error(error);
@@ -92,7 +93,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ onMessage }) =
     
     setSaving(true);
     try {
-      await settingsService.updateSettings(settings, profile.id);
+      await settingsService.updateSettings(settings, profile.id, activeHotelId);
       onMessage({ type: 'success', text: 'Ajustes guardados correctamente.' });
     } catch (error) {
       onMessage({ type: 'error', text: 'Error al guardar ajustes.' });

@@ -47,7 +47,7 @@ const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
 export default function Planificacion() {
-  const { profile } = useAuth()
+  const { profile, activeHotelId } = useAuth()
   const toast = useToast()
   const [tasks, setTasks] = useState([])
   const [history, setHistory] = useState([])
@@ -122,6 +122,7 @@ export default function Planificacion() {
         .from('mantenimiento_preventivo')
         .update({ proxima_fecha: newDate })
         .eq('id', event.id)
+        .eq('hotel_id', activeHotelId)
 
       if (error) throw error
       
@@ -148,15 +149,18 @@ export default function Planificacion() {
     e.preventDefault()
     setLoading(true)
     try {
+      const payload: any = {
+        titulo: newForm.titulo,
+        descripcion: newForm.descripcion,
+        frecuencia: newForm.frecuencia,
+        proxima_fecha: creatingTask.fecha,
+        tipo: newForm.tipo
+      }
+      if (activeHotelId) payload.hotel_id = activeHotelId;
+
       const { error } = await supabase
         .from('mantenimiento_preventivo')
-        .insert([{
-          titulo: newForm.titulo,
-          descripcion: newForm.descripcion,
-          frecuencia: newForm.frecuencia,
-          proxima_fecha: creatingTask.fecha,
-          tipo: newForm.tipo // Asumimos que la columna existe o se guardará en metadata si el schema es flexible
-        }])
+        .insert([payload])
 
       if (error) throw error
       
@@ -174,7 +178,7 @@ export default function Planificacion() {
     fetchTasks()
     fetchHistory()
     fetchElements()
-  }, [])
+  }, [activeHotelId])
 
   const fetchTasks = async () => {
     try {
@@ -183,10 +187,14 @@ export default function Planificacion() {
         setTasks(cached)
       }
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('mantenimiento_preventivo')
         .select('*')
         .order('proxima_fecha', { ascending: true })
+      
+      if (activeHotelId) query = query.eq('hotel_id', activeHotelId);
+      
+      const { data, error } = await query
       if (error) throw error
       setTasks(data || [])
       await dbService.putBatch('mantenimiento', data || [])
@@ -197,7 +205,7 @@ export default function Planificacion() {
 
   const fetchHistory = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('historial_mantenimiento')
         .select(`
           *,
@@ -206,8 +214,12 @@ export default function Planificacion() {
         `)
         .order('completado_el', { ascending: false })
         .limit(20)
+      
+      if (activeHotelId) query = query.eq('hotel_id', activeHotelId);
+
+      const { data, error } = await query
       if (error) throw error
-      setHistory(data)
+      setHistory(data || [])
     } catch (error) {
       console.error('Error fetching history:', error)
     } finally {
@@ -217,13 +229,16 @@ export default function Planificacion() {
 
   const fetchElements = async () => {
     try {
-      const { data, error } = await supabase.from('elementos_mantenimiento').select('*')
+      let query = supabase.from('elementos_mantenimiento').select('*')
+      if (activeHotelId) query = query.eq('hotel_id', activeHotelId)
+      const { data, error } = await query
       if (error) throw error
-      setAllElements(data)
+      setAllElements(data || [])
     } catch (error) {
       console.error('Error fetching elements:', error)
     }
   }
+
 
   const calculateNextDate = (currentDate, frequency) => {
     const date = new Date(currentDate)
@@ -253,7 +268,8 @@ export default function Planificacion() {
           tarea_id: completingTask.id,
           completado_por: profile.id,
           notas: notes,
-          items_completados: selectedElements
+          items_completados: selectedElements,
+          hotel_id: activeHotelId
         }])
       
       if (histError) throw histError
@@ -262,6 +278,7 @@ export default function Planificacion() {
         .from('mantenimiento_preventivo')
         .update({ proxima_fecha: nextDate, ultima_ejecucion: new Date().toISOString() })
         .eq('id', completingTask.id)
+        .eq('hotel_id', activeHotelId)
       
       if (taskError) throw taskError
       
@@ -311,6 +328,7 @@ export default function Planificacion() {
           proxima_fecha: editForm.proxima_fecha
         })
         .eq('id', editingTask.id)
+        .eq('hotel_id', activeHotelId)
       if (error) throw error
       setMsg({ type: 'success', text: `Tarea "${editForm.titulo}" actualizada correctamente.` })
       setEditingTask(null)
@@ -329,6 +347,7 @@ export default function Planificacion() {
         .from('mantenimiento_preventivo')
         .delete()
         .eq('id', task.id)
+        .eq('hotel_id', activeHotelId)
       if (error) throw error
       setMsg({ type: 'success', text: `Tarea "${task.titulo}" eliminada.` })
       fetchTasks()
@@ -448,7 +467,7 @@ export default function Planificacion() {
 
   const generarCertificadoIndividual = async (h) => {
     const doc = new jsPDF()
-    const hotelName = profile?.hotel || 'Hotel Central'
+    const hotelName = activeHotelId ? `Hotel ID: ${activeHotelId}` : 'Hotel Central'
     
     // Configuración inicial
     doc.setFillColor(34, 40, 49)
@@ -502,9 +521,9 @@ export default function Planificacion() {
   }
 
   const handleClearHistory = async () => {
-    if (!confirm('¿Borrar TODO el historial de mantenimiento? Esta acción no se puede deshacer.')) return
+    if (!confirm('¿Borrar TODO el historial de mantenimiento de este hotel? Esta acción no se puede deshacer.')) return
     try {
-      const { error } = await supabase.from('historial_mantenimiento').delete().neq('id', 0)
+      const { error } = await supabase.from('historial_mantenimiento').delete().eq('hotel_id', activeHotelId)
       if (error) throw error
       setHistory([])
       setMsg({ type: 'success', text: 'Historial borrado correctamente.' })

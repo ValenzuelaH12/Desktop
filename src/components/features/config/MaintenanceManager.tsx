@@ -12,13 +12,15 @@ interface MaintenanceManagerProps {
   templates: any[];
   onMessage: (msg: { type: 'success' | 'error', text: string }) => void;
   onRefresh: () => void;
+  activeHotelId: string | null;
 }
 
 export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ 
   maintenance, 
   templates, 
   onMessage,
-  onRefresh
+  onRefresh,
+  activeHotelId
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'tareas' | 'plantillas'>('tareas');
   const [isAddingMaint, setIsAddingMaint] = useState(false);
@@ -29,16 +31,25 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
     descripcion: '',
     frecuencia: 'mensual',
     proxima_fecha: new Date().toISOString().split('T')[0],
-    plantillaId: ''
+    plantillaId: '',
+    hotel_id: activeHotelId || ''
   });
 
-  const [newTemplate, setNewTemplate] = useState({ nombre: '', items: [] as string[] });
+  const [newTemplate, setNewTemplate] = useState({ nombre: '', items: [] as string[], hotel_id: activeHotelId || '' });
+
+  // Sync hotel_id when activeHotelId changes
+  React.useEffect(() => {
+    if (activeHotelId) {
+      setNewMaint(prev => ({ ...prev, hotel_id: activeHotelId }));
+      setNewTemplate(prev => ({ ...prev, hotel_id: activeHotelId }));
+    }
+  }, [activeHotelId]);
   const [newTemplateItem, setNewTemplateItem] = useState('');
 
   const handleAddMaint = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await configService.create('mantenimiento_preventivo', newMaint);
+      await configService.create('mantenimiento_preventivo', { ...newMaint, hotel_id: activeHotelId });
       onMessage({ type: 'success', text: 'Tarea de mantenimiento creada.' });
       setIsAddingMaint(false);
       setNewMaint({ 
@@ -46,7 +57,8 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
         descripcion: '', 
         frecuencia: 'mensual', 
         proxima_fecha: new Date().toISOString().split('T')[0], 
-        plantillaId: '' 
+        plantillaId: '',
+        hotel_id: activeHotelId || ''
       });
       onRefresh();
     } catch (error: any) {
@@ -58,10 +70,10 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
     e.preventDefault();
     if (!newTemplate.nombre.trim()) return;
     try {
-      await configService.create('mantenimiento_plantillas', newTemplate);
+      await configService.create('mantenimiento_plantillas', { ...newTemplate, hotel_id: activeHotelId });
       onMessage({ type: 'success', text: 'Plantilla creada.' });
       setIsAddingTemplate(false);
-      setNewTemplate({ nombre: '', items: [] });
+      setNewTemplate({ nombre: '', items: [], hotel_id: activeHotelId || '' });
       onRefresh();
     } catch (error: any) {
       onMessage({ type: 'error', text: error.message });

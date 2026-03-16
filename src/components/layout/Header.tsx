@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import { useNotifications } from '../../context/NotificationContext'
 import { MessageSquare } from 'lucide-react'
+import { HotelSelector } from './HotelSelector'
 
 export default function Header({ toggleSidebar }) {
   const navigate = useNavigate()
@@ -191,6 +192,7 @@ export default function Header({ toggleSidebar }) {
       </div>
 
       <div className="header-right">
+        <HotelSelector />
         <div className="relative">
           <button 
             className={`notification-btn relative ${showNotifications ? 'active' : ''}`}

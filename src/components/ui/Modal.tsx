@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -31,12 +32,14 @@ export const Modal: React.FC<ModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
+  const modalRoot = document.body;
+
+  return createPortal(
+    <div className="modal-overlay" onClick={onClose} style={{ pointerEvents: 'auto' }}>
       <div 
         className="modal-content" 
         onClick={e => e.stopPropagation()}
-        style={{ maxWidth }}
+        style={{ maxWidth, width: '95%' }}
       >
         <div className="modal-header">
           <h2>{title}</h2>
@@ -53,6 +56,7 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    modalRoot
   );
 };

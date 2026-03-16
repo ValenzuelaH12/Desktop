@@ -2,43 +2,36 @@ import { supabase } from '../lib/supabase';
 import { Incident, IncidentStatus } from '../types';
 
 export const incidentService = {
-  async getAll(): Promise<Incident[]> {
-    const { data, error } = await supabase
-      .from('incidencias')
-      .select('*')
-      .order('created_at', { ascending: false });
-
+  async getAll(hotelId?: string | null): Promise<Incident[]> {
+    let query = supabase.from('incidencias').select('*').order('created_at', { ascending: false });
+    if (hotelId) query = query.eq('hotel_id', hotelId);
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   },
 
-  async getActive(): Promise<Incident[]> {
-    const { data, error } = await supabase
-      .from('incidencias')
-      .select('*')
-      .in('status', ['pending', 'in-progress'])
-      .order('created_at', { ascending: false });
-
+  async getActive(hotelId?: string | null): Promise<Incident[]> {
+    let query = supabase.from('incidencias').select('*').in('status', ['pending', 'in-progress']).order('created_at', { ascending: false });
+    if (hotelId) query = query.eq('hotel_id', hotelId);
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   },
 
-  async getResolvedToday(): Promise<number> {
+  async getResolvedToday(hotelId?: string | null): Promise<number> {
     const today = new Date().toISOString().split('T')[0];
-    const { count, error } = await supabase
-      .from('incidencias')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'resolved')
-      .gte('created_at', today);
-
+    let query = supabase.from('incidencias').select('*', { count: 'exact', head: true }).eq('status', 'resolved').gte('created_at', today);
+    if (hotelId) query = query.eq('hotel_id', hotelId);
+    const { count, error } = await query;
     if (error) throw error;
     return count || 0;
   },
 
-  async create(incident: Partial<Incident>): Promise<Incident> {
+  async create(incident: Partial<Incident>, hotelId?: string | null): Promise<Incident> {
+    const payload = hotelId ? { ...incident, hotel_id: hotelId } : incident;
     const { data, error } = await supabase
       .from('incidencias')
-      .insert([incident])
+      .insert([payload])
       .select()
       .single();
 

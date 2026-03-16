@@ -22,6 +22,19 @@ export default function Chat() {
   const [audioChunks, setAudioChunks] = useState<Blob[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [messageSearchQuery, setMessageSearchQuery] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    show: boolean;
+    type: 'message' | 'chat';
+    id: number | string | null;
+    title: string;
+    description: string;
+  }>({
+    show: false,
+    type: 'message',
+    id: null,
+    title: '',
+    description: ''
+  })
   
   const { unreadPerChannel, clearChannelUnread } = useNotifications()
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -84,13 +97,10 @@ export default function Chat() {
         schema: 'public',
         table: 'mensajes',
       }, (payload) => {
-        const isNew = payload.eventType === 'INSERT'
-        const msg = payload.new
-        if (isNew && msg) {
-          // Solo refrescamos si es del canal activo
-          if (msg.channel === activeChannel) {
-            fetchMessages()
-            // Si estamos viendo el chat, nos aseguramos de que se marque como leído
+        const isMsgChange = payload.new?.channel === activeChannel || payload.old?.channel === activeChannel
+        if (isMsgChange) {
+          fetchMessages()
+          if (payload.eventType === 'INSERT') {
             clearChannelUnread(activeChannel)
           }
         }
@@ -299,7 +309,9 @@ export default function Chat() {
           .from('canales')
           .insert([{ 
             id: channelId, 
-            nombre: channelName
+            nombre: channelName,
+            type: 'direct',
+            created_by: profile.id
           }])
 
         if (insertCanalError) throw insertCanalError
@@ -372,48 +384,97 @@ export default function Chat() {
     )
   }
 
-  const handleDeleteChat = async () => {
-    const channelName = activeChannelInfo?.nombre || activeChannel
-    if (!confirm(`¿Eliminar TODOS los mensajes y archivos multimedia del chat "${channelName}"? Esta acción no se puede deshacer.`)) return
+  const handleDeleteMessage = (messageId: number) => {
+    setDeleteConfirm({
+      show: true,
+      type: 'message',
+      id: messageId,
+      title: '¿Eliminar mensaje?',
+      description: 'Esta acción no se puede deshacer y el mensaje desaparecerá para todos.'
+    })
+  }
+
+  const handleDeleteChat = () => {
+    const channelName = getChannelDisplayName(activeChannelInfo)
+    const isFixedChannel = ['general', 'mantenimiento', 'limpieza', 'direccion'].includes(activeChannel)
+    
+    setDeleteConfirm({
+      show: true,
+      type: 'chat',
+      id: activeChannel,
+      title: isFixedChannel ? '¿Vaciar chat?' : '¿Eliminar conversación?',
+      description: isFixedChannel 
+        ? `¿Confirmas que quieres borrar todos los mensajes y archivos del canal "${channelName}"?`
+        : `¿Confirmas que quieres eliminar la conversación con "${channelName}"? Se borrará todo el historial y desaparecerá de tu lista.`
+    })
+  }
+
+  const confirmDelete = async () => {
+    const { type, id } = deleteConfirm
+    if (!id) return
 
     try {
-      // 1. Obtener mensajes con media para borrar archivos del storage
-      const { data: msgsWithMedia } = await supabase
-        .from('mensajes')
-        .select('media_url')
-        .eq('channel', activeChannel)
-        .not('media_url', 'is', null)
+      if (type === 'message') {
+        const { error } = await supabase
+          .from('mensajes')
+          .delete()
+          .eq('id', id)
 
-      // 2. Borrar archivos del storage (best-effort)
-      if (msgsWithMedia && msgsWithMedia.length > 0) {
-        const filePaths = msgsWithMedia
-          .map(m => {
-            try {
-              const url = new URL(m.media_url)
-              const parts = url.pathname.split('/chat-media/')
-              return parts.length > 1 ? parts[1] : null
-            } catch { return null }
-          })
-          .filter(Boolean)
+        if (error) throw error
+        setMessages(prev => prev.filter(m => m.id !== id))
+        toast.success('Mensaje eliminado')
+      } else {
+        const isFixedChannel = ['general', 'mantenimiento', 'limpieza', 'direccion'].includes(id as string)
+        
+        // 1. Obtener mensajes con media para borrar archivos del storage
+        const { data: msgsWithMedia } = await supabase
+          .from('mensajes')
+          .select('media_url')
+          .eq('channel', id)
+          .not('media_url', 'is', null)
 
-        if (filePaths.length > 0) {
-          await supabase.storage.from('chat-media').remove(filePaths)
+        if (msgsWithMedia && msgsWithMedia.length > 0) {
+          const filePaths = msgsWithMedia
+            .map(m => {
+              try {
+                const url = new URL(m.media_url)
+                const parts = url.pathname.split('/chat-media/')
+                return parts.length > 1 ? parts[1] : null
+              } catch { return null }
+            })
+            .filter(Boolean)
+
+          if (filePaths.length > 0) {
+            await supabase.storage.from('chat-media').remove(filePaths)
+          }
+        }
+
+        // 2. Borrar historial
+        const { error: msgError } = await supabase
+          .from('mensajes')
+          .delete()
+          .eq('channel', id)
+
+        if (msgError) throw msgError
+
+        // 3. Si NO es un canal fijo, borrar el canal y sus miembros
+        if (!isFixedChannel) {
+          await supabase.from('canal_miembros').delete().eq('canal_id', id)
+          await supabase.from('canales').delete().eq('id', id)
+          
+          toast.success('Conversación eliminada')
+          setActiveChannel('general')
+          fetchChannelsAndUsers()
+        } else {
+          setMessages([])
+          toast.success('Chat vaciado correctamente')
         }
       }
-
-      // 3. Borrar todos los mensajes del canal
-      const { error } = await supabase
-        .from('mensajes')
-        .delete()
-        .eq('channel', activeChannel)
-
-      if (error) throw error
-
-      setMessages([])
-      toast.success(`Chat "${channelName}" limpiado correctamente.`)
     } catch (error: any) {
-      console.error('Error deleting chat:', error)
-      toast.error('Error al borrar el chat')
+      console.error('Error in deletion:', error)
+      toast.error('No tienes permisos o ocurrió un error')
+    } finally {
+      setDeleteConfirm(prev => ({ ...prev, show: false }))
     }
   }
 
@@ -541,7 +602,16 @@ export default function Chat() {
                       </span>
                     )}
                     
-                    <div className={`message ${msg.isMe ? 'sent' : 'received'}`}>
+                    <div className={`message ${msg.isMe ? 'sent' : 'received'} group relative`}>
+                      {(msg.isMe || ['admin', 'super_admin', 'direccion'].includes(profile?.rol)) && (
+                        <button 
+                          className="msg-delete-btn opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          title="Eliminar mensaje"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
                       {msg.mediaUrl && (
                         <div className="message-media mb-sm">
                           {msg.mediaType?.startsWith('image/') ? (
@@ -679,6 +749,39 @@ export default function Chat() {
         </div>
       )}
 
+      {/* Modal de Confirmación de Borrado */}
+      {deleteConfirm.show && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#1a1c24] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="flex items-center gap-4 mb-4 text-red-400">
+                <div className="p-3 bg-red-400/10 rounded-full">
+                  <Trash2 size={24} />
+                </div>
+                <h3 className="text-xl font-semibold text-white">{deleteConfirm.title}</h3>
+              </div>
+              <p className="text-gray-400 leading-relaxed">
+                {deleteConfirm.description}
+              </p>
+            </div>
+            <div className="flex border-t border-white/5">
+              <button 
+                onClick={() => setDeleteConfirm(prev => ({ ...prev, show: false }))}
+                className="flex-1 px-6 py-4 text-gray-400 hover:bg-white/5 transition-colors font-medium border-r border-white/5"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="flex-1 px-6 py-4 text-red-400 hover:bg-red-400/10 transition-colors font-semibold"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .modal-overlay {
           position: fixed;
@@ -725,6 +828,29 @@ export default function Chat() {
         }
         .hover-bg-light:hover {
           background: rgba(255, 255, 255, 0.05);
+        }
+
+        .msg-delete-btn {
+          position: absolute;
+          top: -8px;
+          right: -8px;
+          background: #ef4444;
+          color: white;
+          border: none;
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          z-index: 10;
+        }
+
+        .message.received .msg-delete-btn {
+          right: auto;
+          left: -8px;
         }
 
         .chat-page {

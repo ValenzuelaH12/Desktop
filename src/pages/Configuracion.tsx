@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Users, Hotel, Settings, Package, QrCode, Smartphone, Activity, Calendar, 
-  Layers, MapPin, Check, X, Bell
+  Layers, MapPin, Check, X, Bell, Building2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,7 @@ import { MeterManager } from '../components/features/config/MeterManager';
 import { MaintenanceManager } from '../components/features/config/MaintenanceManager';
 import { NexusConfig } from '../components/features/config/NexusConfig';
 import { SettingsManager } from '../components/features/config/SettingsManager';
+import { HotelManager } from '../components/features/config/HotelManager';
 import { configService as configApi } from '../services/configService';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -27,8 +28,15 @@ const TABS = [
 ];
 
 export default function Configuracion() {
-  const { profile } = useAuth();
+  const { profile, activeHotelId } = useAuth();
   const [activeTab, setActiveTab] = useState('usuarios');
+  
+  // Tabs dinámicos basados en permisos
+  const configTabs = [...TABS];
+  if (profile?.rol === 'super_admin') {
+    // Insertar Hoteles al principio
+    configTabs.unshift({ id: 'hoteles', name: 'Hoteles', icon: Building2 });
+  }
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<{ type: 'success' | 'error' | '', text: string }>({ type: '', text: '' });
   
@@ -47,13 +55,13 @@ export default function Configuracion() {
     setLoading(true);
     try {
       const [users, zonas, habitaciones, activos, contadores, mantenimiento, plantillas] = await Promise.all([
-        configApi.getUsers(),
-        configApi.getZones(),
-        configApi.getRooms(),
-        configApi.getAssets(),
-        configApi.getCounters(),
-        supabase.from('mantenimiento_preventivo').select('*').order('frecuencia'), // Fallback for specific table
-        supabase.from('mantenimiento_plantillas').select('*').order('nombre')
+        configApi.getUsers(activeHotelId),
+        configApi.getZones(activeHotelId),
+        configApi.getRooms(activeHotelId),
+        configApi.getAssets(activeHotelId),
+        configApi.getCounters(activeHotelId),
+        supabase.from('mantenimiento_preventivo').select('*').eq('hotel_id', activeHotelId).order('frecuencia'),
+        supabase.from('mantenimiento_plantillas').select('*').eq('hotel_id', activeHotelId).order('nombre')
       ]);
 
       setData({
@@ -75,7 +83,7 @@ export default function Configuracion() {
 
   useEffect(() => {
     fetchAll();
-  }, []);
+  }, [activeHotelId]);
 
   const showMsg = (m: { type: 'success' | 'error', text: string }) => {
     setMsg(m);
@@ -106,7 +114,7 @@ export default function Configuracion() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-md mb-xl">
         <div>
           <h1 className="page-title mb-xs">Configuración del Sistema</h1>
-          <p className="text-muted text-sm">Gestión técnica y operativa de {profile?.hotel || 'el hotel'}</p>
+          <p className="text-muted text-sm">Gestión técnica y operativa del hotel</p>
         </div>
         <div className="flex items-center gap-sm">
            <div className="stat-card glass p-sm px-md rounded-xl border border-white/5">
@@ -124,7 +132,7 @@ export default function Configuracion() {
         {/* Navigation Sidebar */}
         <aside className="config-sidebar glass-card p-sm h-fit sticky top-xl">
           <nav className="flex flex-col gap-xs">
-            {TABS.map(tab => {
+            {configTabs.map(tab => {
               const Icon = tab.icon;
               return (
                 <button
@@ -143,8 +151,18 @@ export default function Configuracion() {
 
         {/* Dynamic Content Panel */}
         <main className="config-main">
+          {activeTab === 'hoteles' && profile?.rol === 'super_admin' && (
+            <HotelManager />
+          )}
+
           {activeTab === 'usuarios' && (
-            <UserManager currentUserProfile={profile} onMessage={showMsg} />
+            <UserManager 
+              currentUserProfile={profile} 
+              onMessage={showMsg} 
+              activeHotelId={activeHotelId}
+              users={data.users}
+              onRefresh={fetchAll}
+            />
           )}
           
           {activeTab === 'zonas' && (
@@ -153,13 +171,17 @@ export default function Configuracion() {
               rooms={data.habitaciones} 
               onMessage={showMsg} 
               onRefresh={fetchAll} 
+              activeHotelId={activeHotelId}
             />
           )}
 
           {activeTab === 'activos' && (
             <AssetManager 
               zones={data.zonas} 
+              assets={data.activos}
+              activeHotelId={activeHotelId}
               onMessage={showMsg} 
+              onRefresh={fetchAll}
             />
           )}
 
@@ -168,6 +190,7 @@ export default function Configuracion() {
               counters={data.contadores} 
               onMessage={showMsg} 
               onRefresh={fetchAll} 
+              activeHotelId={activeHotelId}
             />
           )}
 
@@ -177,6 +200,7 @@ export default function Configuracion() {
               templates={data.plantillas} 
               onMessage={showMsg} 
               onRefresh={fetchAll} 
+              activeHotelId={activeHotelId}
             />
           )}
 
@@ -188,7 +212,7 @@ export default function Configuracion() {
           )}
 
           {activeTab === 'ajustes' && (
-            <SettingsManager onMessage={showMsg} />
+            <SettingsManager onMessage={showMsg} activeHotelId={activeHotelId} />
           )}
         </main>
       </div>

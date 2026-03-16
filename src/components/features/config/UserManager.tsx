@@ -11,15 +11,20 @@ import { AVAILABLE_MODULES } from '../../../constants';
 
 interface UserManagerProps {
   currentUserProfile: Profile | null;
-  onMessage: (msg: { type: 'success' | 'error', text: string }) => void;
+  onMessage: (msg: { type: 'success' | 'error' | '', text: string }) => void;
+  activeHotelId: string | null;
+  users: Profile[];
+  onRefresh: () => void;
 }
 
 export const UserManager: React.FC<UserManagerProps> = ({ 
-  currentUserProfile,
-  onMessage 
+  currentUserProfile, 
+  onMessage,
+  activeHotelId,
+  users,
+  onRefresh
 }) => {
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isEditingUser, setIsEditingUser] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
@@ -29,26 +34,16 @@ export const UserManager: React.FC<UserManagerProps> = ({
     password: '',
     nombre: '',
     rol: 'recepcion' as UserRole,
-    hotel: currentUserProfile?.hotel || 'Hotel Central',
+    hotel_id: activeHotelId || '00000000-0000-0000-0000-000000000000',
     permisos: ['dashboard', 'incidencias', 'chat'] as string[]
   });
 
-  const fetchUsers = async () => {
-    setLoading(true);
-    try {
-      const data = await configService.getUsers();
-      setUsers(data);
-    } catch (error) {
-      console.error(error);
-      onMessage({ type: 'error', text: 'Error al cargar usuarios' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Sync newUser.hotel_id when activeHotelId changes
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (activeHotelId) {
+      setNewUser(prev => ({ ...prev, hotel_id: activeHotelId }));
+    }
+  }, [activeHotelId]);
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +65,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
           data: {
             nombre: newUser.nombre.trim(),
             rol: newUser.rol,
-            hotel: newUser.hotel,
+            hotel_id: newUser.hotel_id,
             permisos: newUser.permisos
           }
         }
@@ -85,10 +80,10 @@ export const UserManager: React.FC<UserManagerProps> = ({
         password: '', 
         nombre: '', 
         rol: 'recepcion', 
-        hotel: currentUserProfile?.hotel || 'Hotel Central', 
+        hotel_id: currentUserProfile?.hotel_id || '00000000-0000-0000-0000-000000000000', 
         permisos: ['dashboard', 'incidencias', 'chat'] 
       });
-      fetchUsers();
+      onRefresh();
     } catch (error: any) {
       onMessage({ type: 'error', text: error.message });
     }
@@ -102,13 +97,13 @@ export const UserManager: React.FC<UserManagerProps> = ({
       await configService.update('perfiles', editingUser.id, {
         nombre: editingUser.nombre,
         rol: editingUser.rol,
-        hotel: editingUser.hotel,
+        hotel_id: editingUser.hotel_id,
         permisos: editingUser.permisos
       });
       
       onMessage({ type: 'success', text: 'Usuario actualizado correctamente.' });
       setIsEditingUser(false);
-      fetchUsers();
+      onRefresh();
     } catch (error: any) {
       onMessage({ type: 'error', text: error.message });
     }
@@ -120,7 +115,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
     try {
       await configService.delete('perfiles', id);
       onMessage({ type: 'success', text: 'Usuario eliminado correctamente.' });
-      fetchUsers();
+      onRefresh();
     } catch (error: any) {
       onMessage({ type: 'error', text: error.message });
     }
@@ -166,9 +161,8 @@ export const UserManager: React.FC<UserManagerProps> = ({
                       {u.rol?.toUpperCase()}
                     </Badge>
                   </td>
-                  <td className="text-muted">{u.hotel}</td>
-                  <td className="text-xs text-muted font-mono">
-                    {u.id.substring(0, 8)}...
+                  <td className="text-muted text-xs">
+                    {u.hotel_id === '00000000-0000-0000-0000-000000000000' ? 'Hotel Principal' : u.hotel_id?.substring(0, 8)}
                   </td>
                   <td>
                     <div className="flex gap-sm">
@@ -206,43 +200,44 @@ export const UserManager: React.FC<UserManagerProps> = ({
           <Button onClick={handleAddUser}>Registrar</Button>
         }
       >
-        <div className="input-group mb-md">
-          <label className="input-label">Nombre</label>
-          <input 
-            type="text" 
-            className="input" 
-            value={newUser.nombre} 
-            onChange={e => setNewUser({...newUser, nombre: e.target.value})} 
-            required 
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-md mb-md">
+        <div className="grid grid-cols-2 gap-sm mb-sm">
           <div className="input-group">
-            <label className="input-label">Email</label>
+            <label className="input-label text-[10px] mb-xs">Nombre Completo</label>
+            <input 
+              type="text" 
+              className="input py-1.5 text-xs" 
+              value={newUser.nombre} 
+              onChange={e => setNewUser({...newUser, nombre: e.target.value})} 
+              required 
+            />
+          </div>
+          <div className="input-group">
+            <label className="input-label text-[10px] mb-xs">Email</label>
             <input 
               type="email" 
-              className="input" 
+              className="input py-1.5 text-xs" 
               value={newUser.email} 
               onChange={e => setNewUser({...newUser, email: e.target.value})} 
               required 
             />
           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-sm items-end mb-sm">
           <div className="input-group">
-            <label className="input-label">Password</label>
+            <label className="input-label text-[10px] mb-xs">Contraseña</label>
             <input 
               type="password" 
-              className="input" 
+              className="input py-1.5 text-xs" 
               value={newUser.password} 
               onChange={e => setNewUser({...newUser, password: e.target.value})} 
               required 
             />
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-md">
           <div className="input-group">
-            <label className="input-label">Rol</label>
+            <label className="input-label text-[10px] mb-xs">Rol del Usuario</label>
             <select 
-              className="select" 
+              className="select py-1.5 text-xs" 
               value={newUser.rol} 
               onChange={e => setNewUser({...newUser, rol: e.target.value as UserRole})}
             >
@@ -253,27 +248,21 @@ export const UserManager: React.FC<UserManagerProps> = ({
               <option value="admin">Administrador</option>
             </select>
           </div>
-          <div className="input-group">
-            <label className="input-label">Hotel</label>
-            <input 
-              type="text" 
-              className="input" 
-              value={newUser.hotel} 
-              onChange={e => setNewUser({...newUser, hotel: e.target.value})} 
-            />
-          </div>
         </div>
-        
-        <div className="input-group mt-md">
-          <label className="input-label mb-md">Gestión de Accesos (Permisos)</label>
-          <div className="permissions-grid">
+
+        <div className="input-group mb-sm">
+          <div className="flex justify-between items-center mb-xs">
+            <label className="input-label text-[10px]">Permisos de Acceso</label>
+            <span className="text-[9px] text-muted">Haz clic para activar/desactivar</span>
+          </div>
+          <div className="permissions-grid-compact">
             {AVAILABLE_MODULES.map(module => {
               const Icon = module.icon;
               const isActive = newUser.permisos?.includes(module.id);
               return (
                 <div 
                   key={module.id} 
-                  className={`permission-card ${isActive ? 'active' : ''}`}
+                  className={`perm-tag ${isActive ? 'active' : ''}`}
                   onClick={() => {
                     const perms = isActive 
                       ? (newUser.permisos || []).filter(p => p !== module.id)
@@ -281,13 +270,8 @@ export const UserManager: React.FC<UserManagerProps> = ({
                     setNewUser({...newUser, permisos: perms});
                   }}
                 >
-                  <div className="permission-icon">
-                    <Icon size={20} />
-                  </div>
-                  <div className="permission-info">
-                    <span className="permission-name">{module.name}</span>
-                    <span className="permission-desc">{module.desc}</span>
-                  </div>
+                  <Icon size={12} />
+                  <span>{module.name}</span>
                 </div>
               );
             })}
@@ -300,28 +284,28 @@ export const UserManager: React.FC<UserManagerProps> = ({
         isOpen={isEditingUser} 
         onClose={() => setIsEditingUser(false)}
         title="Editar Miembro"
-        maxWidth="600px"
+        maxWidth="550px"
         footer={
           <Button onClick={handleUpdateUser}>Guardar Cambios</Button>
         }
       >
         {editingUser && (
-          <>
-            <div className="input-group mb-md">
-              <label className="input-label">Nombre</label>
-              <input 
-                type="text" 
-                className="input" 
-                value={editingUser.nombre} 
-                onChange={e => setEditingUser({...editingUser, nombre: e.target.value})} 
-                required 
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-md mb-md">
+          <div className="space-y-sm">
+            <div className="grid grid-cols-2 gap-sm">
               <div className="input-group">
-                <label className="input-label">Rol</label>
+                <label className="input-label text-[10px] mb-xs">Nombre</label>
+                <input 
+                  type="text" 
+                  className="input py-1.5 text-xs" 
+                  value={editingUser.nombre} 
+                  onChange={e => setEditingUser({...editingUser, nombre: e.target.value})} 
+                  required 
+                />
+              </div>
+              <div className="input-group">
+                <label className="input-label text-[10px] mb-xs">Rol</label>
                 <select 
-                  className="select" 
+                  className="select py-1.5 text-xs" 
                   value={editingUser.rol} 
                   onChange={e => setEditingUser({...editingUser, rol: e.target.value as UserRole})}
                 >
@@ -332,26 +316,18 @@ export const UserManager: React.FC<UserManagerProps> = ({
                   <option value="admin">Administrador</option>
                 </select>
               </div>
-              <div className="input-group">
-                <label className="input-label">Hotel</label>
-                <input 
-                  type="text" 
-                  className="input" 
-                  value={editingUser.hotel} 
-                  onChange={e => setEditingUser({...editingUser, hotel: e.target.value})} 
-                />
-              </div>
             </div>
-            <div className="input-group mt-md">
-              <label className="input-label mb-md">Gestión de Accesos (Permisos)</label>
-              <div className="permissions-grid">
+            
+            <div className="input-group">
+              <label className="input-label text-[10px] mb-xs">Permisos de Acceso</label>
+              <div className="permissions-grid-compact">
                 {AVAILABLE_MODULES.map(module => {
                   const Icon = module.icon;
                   const isActive = editingUser.permisos?.includes(module.id);
                   return (
                     <div 
                       key={module.id} 
-                      className={`permission-card ${isActive ? 'active' : ''}`}
+                      className={`perm-tag ${isActive ? 'active' : ''}`}
                       onClick={() => {
                         const perms = isActive 
                           ? (editingUser.permisos || []).filter(p => p !== module.id)
@@ -359,55 +335,51 @@ export const UserManager: React.FC<UserManagerProps> = ({
                         setEditingUser({...editingUser, permisos: perms});
                       }}
                     >
-                      <div className="permission-icon">
-                        <Icon size={20} />
-                      </div>
-                      <div className="permission-info">
-                        <span className="permission-name">{module.name}</span>
-                        <span className="permission-desc">{module.desc}</span>
-                      </div>
+                      <Icon size={12} />
+                      <span>{module.name}</span>
                     </div>
                   );
                 })}
               </div>
             </div>
-          </>
+          </div>
         )}
       </Modal>
-
       <style>{`
-        .permissions-grid {
+        .permissions-grid-compact {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-          gap: var(--spacing-sm);
+          grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+          gap: 4px;
         }
-        .permission-card {
-          padding: var(--spacing-sm);
+        .perm-tag {
+          padding: 4px 10px;
           background: rgba(255,255,255,0.03);
           border: 1px solid var(--color-border);
-          border-radius: var(--radius-md);
+          border-radius: var(--radius-sm);
           cursor: pointer;
-          transition: all var(--transition-fast);
+          transition: all 0.2s ease;
           display: flex;
           align-items: center;
-          gap: var(--spacing-sm);
+          gap: 6px;
+          font-size: 10px;
+          font-weight: 500;
+          height: 32px;
         }
-        .permission-card.active {
+        .perm-tag.active {
           border-color: var(--color-accent);
           background: var(--color-accent-light);
-        }
-        .permission-name {
-          font-weight: 600;
-          font-size: var(--font-size-sm);
-          display: block;
-        }
-        .permission-desc {
-          font-size: 10px;
-          color: var(--color-text-muted);
-          display: block;
+          color: white;
         }
         .grid { display: grid; }
         .grid-cols-2 { grid-template-columns: 1fr 1fr; }
+        .grid-cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .items-end { align-items: end; }
+        .mb-none { margin-bottom: 0; }
+        .mb-sm { margin-bottom: var(--spacing-sm); }
+        .mb-xs { margin-bottom: var(--spacing-xs); }
+        .gap-sm { gap: var(--spacing-sm); }
+        .py-1.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+        .text-xs { font-size: 0.75rem; }
       `}</style>
     </Card>
   );

@@ -15,13 +15,14 @@ import {
   FileSpreadsheet,
   FileText
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
+import { inventoryService } from '../services/inventoryService'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 export default function Inventory() {
-  const { profile } = useAuth()
+  const { profile, activeHotelId } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -39,17 +40,12 @@ export default function Inventory() {
 
   useEffect(() => {
     fetchInventory()
-  }, [])
+  }, [activeHotelId])
 
   const fetchInventory = async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('inventario')
-        .select('*')
-        .order('nombre', { ascending: true })
-
-      if (error) throw error
+      const data = await inventoryService.getAll(activeHotelId)
       setItems(data || [])
     } catch (error) {
       console.error('Error fetching inventory:', error)
@@ -62,23 +58,9 @@ export default function Inventory() {
     e.preventDefault()
     try {
       if (editingItem) {
-        const { error } = await supabase
-          .from('inventario')
-          .update({
-            ...formData,
-            actualizado_por: profile.id,
-            ultima_actualizacion: new Date().toISOString()
-          })
-          .eq('id', editingItem.id)
-        if (error) throw error
+        await inventoryService.update(editingItem.id, formData, profile.id)
       } else {
-        const { error } = await supabase
-          .from('inventario')
-          .insert([{
-            ...formData,
-            actualizado_por: profile.id
-          }])
-        if (error) throw error
+        await inventoryService.create(formData, profile.id, activeHotelId)
       }
       setIsModalOpen(false)
       setEditingItem(null)
@@ -91,14 +73,13 @@ export default function Inventory() {
 
   const handleUpdateStock = async (id, current, delta) => {
     try {
+      const newStock = Math.max(0, current + delta)
       const { error } = await supabase
         .from('inventario')
-        .update({ 
-          stock_actual: Math.max(0, current + delta),
-          ultima_actualizacion: new Date().toISOString(),
-          actualizado_por: profile.id
-        })
+        .update({ stock_actual: newStock, ultima_actualizacion: new Date().toISOString(), actualizado_por: profile.id })
         .eq('id', id)
+        .eq('hotel_id', activeHotelId)
+      
       if (error) throw error
       fetchInventory()
     } catch (error) {
@@ -109,7 +90,12 @@ export default function Inventory() {
   const handleDelete = async (id) => {
     if (!confirm('¿Estás seguro de eliminar este artículo?')) return
     try {
-      const { error } = await supabase.from('inventario').delete().eq('id', id)
+      const { error } = await supabase
+        .from('inventario')
+        .delete()
+        .eq('id', id)
+        .eq('hotel_id', activeHotelId)
+      
       if (error) throw error
       fetchInventory()
     } catch (error) {
@@ -118,13 +104,14 @@ export default function Inventory() {
   }
 
   const filteredItems = items.filter(item => {
-    const matchesSearch = item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          item.categoria.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesSearch = (item.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (item.categoria || '').toLowerCase().includes(searchTerm.toLowerCase())
     if (filter === 'low') return matchesSearch && item.stock_actual <= item.stock_minimo
     return matchesSearch
   })
 
-  const categories = [...new Set(items.map(i => i.categoria))]
+
+  const categories = Array.from(new Set(items.map(i => i.categoria).filter(Boolean)))
 
   const exportToCSV = () => {
     const headers = ['ID', 'Nombre', 'Categoría', 'Stock Actual', 'Stock Mínimo', 'Unidad', 'Última Actualización']
