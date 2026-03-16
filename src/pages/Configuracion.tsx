@@ -99,7 +99,7 @@ export default function Configuracion() {
   }
 
   return (
-    <div className="config-container p-md md:p-xl animate-fade-in">
+    <div className="config-container p-md md:p-xl">
       {/* Toast Notification */}
       {msg.text && (
         <div className={`toast ${msg.type === 'error' ? 'toast-danger' : 'toast-success'} animate-slide-right`}>

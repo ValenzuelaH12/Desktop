@@ -187,7 +187,7 @@ export default function Inventory() {
   }
 
   return (
-    <div className="inventory-page animate-fade-in">
+    <div className="inventory-page">
       <div className="page-header">
         <div>
           <h1 className="page-title">Inventario y Suministros</h1>

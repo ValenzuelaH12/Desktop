@@ -160,7 +160,7 @@ export default function AssetDetail() {
         </div>
 
         {activeTab === 'info' ? (
-          <div className="space-y-8 animate-fade-in">
+          <div className="space-y-8">
             {/* Modular Info Section */}
             <div className="grid grid-cols-2 gap-4">
               <div className="p-5 bg-white/[0.03] border border-white/5 rounded-3xl group hover:bg-white/[0.05] transition-all">

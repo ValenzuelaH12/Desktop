@@ -479,7 +479,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="chat-page animate-fade-in">
+    <div className="chat-page">
       <div className="chat-layout glass-card">
         
         {/* Lista de Conversaciones */}

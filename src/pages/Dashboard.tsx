@@ -238,7 +238,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="dashboard animate-fade-in">
+    <div className="dashboard-container">
       <div className="page-header">
         <div>
           <h1 className="page-title">Vista General</h1>

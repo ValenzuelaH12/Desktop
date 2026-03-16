@@ -303,7 +303,7 @@ export default function Lecturas() {
   }
 
   return (
-    <div className="lecturas-page animate-fade-in">
+    <div className="lecturas-page">
       <div className="page-header">
         <div>
           <h1 className="page-title">Lecturas de Suministros</h1>

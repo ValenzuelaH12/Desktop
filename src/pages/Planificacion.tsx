@@ -545,7 +545,7 @@ export default function Planificacion() {
   }
 
   return (
-    <div className="planificacion-page animate-fade-in">
+    <div className="v-calendar-container">
       <div className="page-header mb-xl" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 className="page-title">Planificación de Mantenimiento</h1>

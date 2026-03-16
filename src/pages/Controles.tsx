@@ -119,7 +119,7 @@ export default function Controles() {
   })
 
   return (
-    <div className="controles-page animate-fade-in">
+    <div className="controles-page">
       <div className="page-header">
         <div>
           <h1 className="page-title">Controles y Tareas</h1>

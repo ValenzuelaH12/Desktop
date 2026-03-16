@@ -307,7 +307,7 @@ export default function VInsights() {
   }
 
   return (
-    <div className="insights-page animate-fade-in">
+    <div className="insights-page">
       <div className="page-header">
         <div>
           <h1 className="page-title flex items-center gap-sm">
