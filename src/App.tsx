@@ -11,6 +11,7 @@ import Configuracion from './pages/Configuracion'
 import Lecturas from './pages/Lecturas'
 import Planificacion from './pages/Planificacion'
 import Inventory from './pages/Inventory'
+import VInsights from './pages/VInsights'
 import GuestPortal from './pages/GuestPortal'
 import AssetDetail from './pages/AssetDetail'
 
@@ -89,6 +90,7 @@ function AppRoutes() {
         <Route path="lecturas" element={<PermissionRoute moduleId="lecturas"><Lecturas /></PermissionRoute>} />
         <Route path="planificacion" element={<PermissionRoute moduleId="planificacion"><Planificacion /></PermissionRoute>} />
         <Route path="inventario" element={<PermissionRoute moduleId="inventario"><Inventory /></PermissionRoute>} />
+        <Route path="insights" element={<PermissionRoute moduleId="insights"><VInsights /></PermissionRoute>} />
         <Route path="asset/:id" element={<AssetDetail />} />
         {/* Futuras rutas:
         <Route path="incidencias/:id" element={<IncidenciaDetalle />} />

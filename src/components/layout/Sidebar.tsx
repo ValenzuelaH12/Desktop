@@ -10,7 +10,8 @@ import {
   Hotel,
   Activity,
   Calendar,
-  Package
+  Package,
+  BarChart3
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
@@ -28,6 +29,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
     { id: 'lecturas', name: 'Lecturas', path: '/lecturas', icon: Activity },
     { id: 'chat', name: 'Chat', path: '/chat', icon: MessageSquare },
     { id: 'planificacion', name: 'Planificación', path: '/planificacion', icon: Calendar },
+    { id: 'insights', name: 'V-Insights', path: '/insights', icon: BarChart3 },
     { id: 'configuracion', name: 'Configuración', path: '/configuracion', icon: Settings },
   ]
 

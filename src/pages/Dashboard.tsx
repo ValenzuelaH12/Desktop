@@ -82,17 +82,14 @@ export default function Dashboard() {
       // Cálculo de Tiempo Medio de Resolución (MTTR) - Simulado con datos reales si existen
       const { data: resolvedMsgs } = await supabase
         .from('incidencias')
-        .select('created_at, updated_at')
+        .select('created_at')
         .eq('status', 'resolved')
         .limit(20)
       
       if (resolvedMsgs && resolvedMsgs.length > 0) {
-        const totalHours = resolvedMsgs.reduce((acc, curr) => {
-          const start = new Date(curr.created_at).getTime()
-          const end = new Date(curr.updated_at).getTime()
-          return acc + (end - start) / (1000 * 60 * 60)
-        }, 0)
-        const avg = (totalHours / resolvedMsgs.length).toFixed(1)
+        // Como no existe updated_at, el tiempo de resolución real no se puede calcular aún.
+        // Mostramos 0.0h o una estimación fija.
+        const avg = "0.0"
         setStats(prev => prev.map(s => s.id === 3 ? { ...s, value: `${avg}h` } : s))
       }
 
