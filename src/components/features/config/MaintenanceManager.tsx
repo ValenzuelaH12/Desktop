@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { ClipboardList, Plus, Trash2, Calendar, Activity, CheckCircle, Clock, Layers, X } from 'lucide-react';
+import { ClipboardList, Plus, Trash2, Calendar, Activity, CheckCircle, Clock, Layers, X, Repeat } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { configService } from '../../../services/configService';
 import { Card } from '../../ui/Card';
@@ -125,6 +124,52 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
       setIsAddingTemplate(false);
       setNewTemplate({ nombre: '', items: [], hotel_id: activeHotelId || '' });
       onRefresh();
+    } catch (error: any) {
+      onMessage({ type: 'error', text: error.message });
+    }
+  };
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCat.nombre.trim()) return;
+    try {
+      const { data, error } = await supabase
+        .from('mantenimiento_categorias')
+        .insert([{ ...newCat, hotel_id: activeHotelId }])
+        .select();
+      if (error) throw error;
+      onMessage({ type: 'success', text: 'Categoría creada.' });
+      setNewCat({ nombre: '', subcategorias: [] });
+      setIsManagingCats(false);
+      fetchCategories();
+    } catch (error: any) {
+      onMessage({ type: 'error', text: error.message });
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    if (!confirm('¿Seguro que deseas eliminar esta categoría?')) return;
+    try {
+      const { error } = await supabase
+        .from('mantenimiento_categorias')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      onMessage({ type: 'success', text: 'Categoría eliminada.' });
+      fetchCategories();
+    } catch (error: any) {
+      onMessage({ type: 'error', text: error.message });
+    }
+  };
+
+  const handleUpdateCategory = async (id: string, updates: any) => {
+    try {
+      const { error } = await supabase
+        .from('mantenimiento_categorias')
+        .update(updates)
+        .eq('id', id);
+      if (error) throw error;
+      fetchCategories();
     } catch (error: any) {
       onMessage({ type: 'error', text: error.message });
     }
@@ -292,6 +337,52 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
             </div>
           )}
         </div>
+      ) : activeSubTab === 'categorias' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {dbCategories.map(cat => (
+            <Card key={cat.id} className="template-card group hover-scale p-none relative overflow-hidden border-white/5 bg-black/40 backdrop-blur-sm">
+              <div className="p-xl">
+                <div className="flex justify-between items-center mb-lg">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                    <Layers size={20} />
+                  </div>
+                  <span className="text-[10px] font-black text-muted uppercase bg-white/5 px-3 py-1 rounded-full border border-white/10">
+                    {cat.subcategorias?.length || 0} HIJOS
+                  </span>
+                </div>
+                
+                <h4 className="text-lg font-black text-white mb-md group-hover:text-indigo-300 transition-colors uppercase tracking-tight">{cat.nombre}</h4>
+                
+                <div className="flex flex-wrap gap-xs mb-lg min-h-[60px]">
+                  {cat.subcategorias?.map((sub: string, i: number) => (
+                    <span key={i} className="text-[10px] font-bold text-white/40 py-1 px-3 bg-white/5 rounded-lg border border-white/5 whitespace-nowrap">
+                      {sub}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex justify-end pt-md border-t border-white/5 gap-sm">
+                  <button 
+                    onClick={() => handleDeleteCategory(cat.id)}
+                    className="p-2 rounded-lg hover:bg-danger/20 hover:text-danger text-muted transition-all"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            </Card>
+          ))}
+          {dbCategories.length === 0 && !loadingCats && (
+            <div className="col-span-full py-20 flex flex-col items-center justify-center text-center glass-card border-dashed">
+              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-md">
+                <Layers size={32} className="text-muted" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-xs">No hay categorías</h3>
+              <p className="text-muted text-sm max-w-xs">Organiza tus tareas preventivas por categorías y subcategorías personalizadas.</p>
+              <Button variant="ghost" className="mt-lg" onClick={() => setIsManagingCats(true)}>Añadir primera categoría</Button>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {templates.map(t => (
@@ -405,9 +496,9 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
                     { id: 'diario', label: 'Diario', icon: Clock },
                     { id: 'semanal', label: 'Semanal', icon: Calendar },
                     { id: 'mensual', label: 'Mensual', icon: Layers },
-                    { id: 'trimestral', label: 'Trimestral', icon: Activity },
+                    { id: 'trimestral', label: 'Trimestral', icon: Repeat },
                     { id: 'semestral', label: 'Cada 6 meses', icon: Activity },
-                    { id: 'anual', label: 'Anual', icon: Activity }
+                    { id: 'anual', label: 'Anual', icon: CheckCircle }
                   ].map(f => (
                     <div 
                       key={f.id}
@@ -532,6 +623,84 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
             </button>
             <button type="submit" className="btn-premium-primary">
               Guardar Plantilla
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Gestionar Categoría y Subcategorías */}
+      <Modal
+        isOpen={isManagingCats}
+        onClose={() => setIsManagingCats(false)}
+        title="Crear Nueva Categoría"
+        maxWidth="600px"
+      >
+        <form onSubmit={handleCreateCategory} className="maint-premium-form animate-slide-up">
+          <div className="input-field-group">
+            <label>Nombre de la Categoría</label>
+            <input 
+              type="text" 
+              required 
+              value={newCat.nombre}
+              onChange={e => setNewCat({...newCat, nombre: e.target.value})}
+              placeholder="Ej: Climatización"
+              className="premium-input"
+            />
+          </div>
+
+          <div className="template-items-section mt-lg">
+            <label className="input-label-premium">Subcategorías / Elementos (Opcional)</label>
+            <div className="dynamic-items-list glass">
+              {newCat.subcategorias.map((sub, idx) => (
+                <div key={idx} className="template-item-row animate-fade-in">
+                  <Layers size={14} className="text-indigo-400" />
+                  <span className="flex-1 text-white/70">{sub}</span>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const updated = [...newCat.subcategorias];
+                      updated.splice(idx, 1);
+                      setNewCat({...newCat, subcategorias: updated});
+                    }}
+                    className="text-white/20 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              
+              <div className="add-item-control mt-md">
+                <input 
+                  type="text"
+                  value={newSubItem}
+                  onChange={e => setNewSubItem(e.target.value)}
+                  onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), (newSubItem.trim() && (setNewCat({...newCat, subcategorias: [...newCat.subcategorias, newSubItem.trim()]}), setNewSubItem(''))))}
+                  placeholder="Añadir subcategoría (Entrar)..."
+                  className="item-input"
+                />
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    if (newSubItem.trim()) {
+                      setNewCat({...newCat, subcategorias: [...newCat.subcategorias, newSubItem.trim()]});
+                      setNewSubItem('');
+                    }
+                  }} 
+                  className="item-add-btn"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="premium-modal-footer mt-xl">
+            <button type="button" onClick={() => setIsManagingCats(false)} className="btn-premium-secondary">
+              Cancelar
+            </button>
+            <button type="submit" className="btn-premium-primary">
+              <Plus size={18} />
+              Crear Categoría
             </button>
           </div>
         </form>
