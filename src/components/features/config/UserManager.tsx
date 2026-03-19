@@ -209,7 +209,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
             <label className="input-label text-[10px] mb-xs">Nombre Completo</label>
             <input 
               type="text" 
-              className="input py-1.5 text-xs" 
+              className="input" 
               value={newUser.nombre} 
               onChange={e => setNewUser({...newUser, nombre: e.target.value})} 
               required 
@@ -219,7 +219,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
             <label className="input-label text-[10px] mb-xs">Email</label>
             <input 
               type="email" 
-              className="input py-1.5 text-xs" 
+              className="input" 
               value={newUser.email} 
               onChange={e => setNewUser({...newUser, email: e.target.value})} 
               required 
@@ -232,7 +232,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
             <label className="input-label text-[10px] mb-xs">Contraseña</label>
             <input 
               type="password" 
-              className="input py-1.5 text-xs" 
+              className="input" 
               value={newUser.password} 
               onChange={e => setNewUser({...newUser, password: e.target.value})} 
               required 
@@ -241,7 +241,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
           <div className="input-group">
             <label className="input-label text-[10px] mb-xs">Rol del Usuario</label>
             <select 
-              className="select py-1.5 text-xs" 
+              className="select" 
               value={newUser.rol} 
               onChange={e => setNewUser({...newUser, rol: e.target.value as UserRole})}
             >
@@ -259,14 +259,14 @@ export const UserManager: React.FC<UserManagerProps> = ({
             <label className="input-label text-[10px]">Permisos de Acceso</label>
             <span className="text-[9px] text-muted">Haz clic para activar/desactivar</span>
           </div>
-          <div className="permissions-grid-compact">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {AVAILABLE_MODULES.map(module => {
               const Icon = module.icon;
               const isActive = newUser.permisos?.includes(module.id);
               return (
                 <div 
                   key={module.id} 
-                  className={`perm-tag ${isActive ? 'active' : ''}`}
+                  className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${isActive ? 'bg-accent/20 border-accent/40 text-accent' : 'bg-white/5 border-white/5 text-muted hover:border-white/10'}`}
                   onClick={() => {
                     const perms = isActive 
                       ? (newUser.permisos || []).filter(p => p !== module.id)
@@ -274,8 +274,8 @@ export const UserManager: React.FC<UserManagerProps> = ({
                     setNewUser({...newUser, permisos: perms});
                   }}
                 >
-                  <Icon size={12} />
-                  <span>{module.name}</span>
+                  <Icon size={14} />
+                  <span className="text-[11px] font-medium">{module.name}</span>
                 </div>
               );
             })}
@@ -324,14 +324,14 @@ export const UserManager: React.FC<UserManagerProps> = ({
             
             <div className="input-group">
               <label className="input-label text-[10px] mb-xs">Permisos de Acceso</label>
-              <div className="permissions-grid-compact">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {AVAILABLE_MODULES.map(module => {
                   const Icon = module.icon;
                   const isActive = editingUser.permisos?.includes(module.id);
                   return (
                     <div 
                       key={module.id} 
-                      className={`perm-tag ${isActive ? 'active' : ''}`}
+                      className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${isActive ? 'bg-accent/20 border-accent/40 text-accent' : 'bg-white/5 border-white/5 text-muted hover:border-white/10'}`}
                       onClick={() => {
                         const perms = isActive 
                           ? (editingUser.permisos || []).filter(p => p !== module.id)
@@ -339,8 +339,8 @@ export const UserManager: React.FC<UserManagerProps> = ({
                         setEditingUser({...editingUser, permisos: perms});
                       }}
                     >
-                      <Icon size={12} />
-                      <span>{module.name}</span>
+                      <Icon size={14} />
+                      <span className="text-[11px] font-medium">{module.name}</span>
                     </div>
                   );
                 })}
