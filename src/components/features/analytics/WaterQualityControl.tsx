@@ -47,6 +47,8 @@ export const WaterQualityControl: React.FC<WaterQualityControlProps> = ({ active
     notas: ''
   });
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   useEffect(() => {
     fetchRecords();
   }, [activeHotelId]);
@@ -97,13 +99,20 @@ export const WaterQualityControl: React.FC<WaterQualityControlProps> = ({ active
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar este registro de control?')) return;
+  const handleDelete = async () => {
+    if (!deletingId) return;
     try {
-      await waterService.delete(id);
+      console.log('DEBUG: Intentando borrar registro', deletingId);
+      await waterService.delete(deletingId);
+      setDeletingId(null);
       fetchRecords();
-    } catch (error) {
-      alert('Error al borrar');
+    } catch (error: any) {
+      console.error('Error delete:', error);
+      if (error?.code === '42501') {
+        alert('Error de permisos (RLS): No tiene autorización para eliminar este registro. Contacte con un administrador.');
+      } else {
+        alert('Error al intentar borrar el registro hídrico.');
+      }
     }
   };
 
@@ -361,7 +370,7 @@ export const WaterQualityControl: React.FC<WaterQualityControlProps> = ({ active
                   </td>
                   <td className="py-4 px-6 text-right">
                     <button 
-                      onClick={() => handleDelete(r.id)}
+                      onClick={() => setDeletingId(r.id)}
                       className="p-2 text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-all border border-transparent hover:border-danger/20"
                     >
                       <Trash2 size={14} />
@@ -373,6 +382,38 @@ export const WaterQualityControl: React.FC<WaterQualityControlProps> = ({ active
           </table>
         </div>
       </div>
+
+      {/* DELETE CONFIRMATION MODAL */}
+      <Modal
+        isOpen={!!deletingId}
+        onClose={() => setDeletingId(null)}
+        title="Confirmar Eliminación"
+      >
+        <div className="p-4 space-y-6 text-center">
+          <div className="w-16 h-16 bg-danger/10 text-danger rounded-full flex items-center justify-center mx-auto">
+            <AlertTriangle size={32} />
+          </div>
+          <div>
+            <h4 className="text-white font-black uppercase text-sm tracking-widest mb-2">¿Estás seguro?</h4>
+            <p className="text-muted text-xs">Esta acción eliminará permanentemente la analítica seleccionada. No se puede deshacer.</p>
+          </div>
+          <div className="flex gap-3">
+            <Button 
+              variant="secondary" 
+              className="flex-1 rounded-xl"
+              onClick={() => setDeletingId(null)}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              className="flex-1 bg-danger hover:bg-red-600 text-white rounded-xl"
+              onClick={handleDelete}
+            >
+              Eliminar Definitivamente
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <style>{`
         .zona-style-input-card {

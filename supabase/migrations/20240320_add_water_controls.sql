@@ -32,12 +32,12 @@ DO $$ BEGIN
         
     CREATE POLICY "Mantenimiento y admins pueden insertar controles" ON public.controles_agua
         FOR INSERT WITH CHECK (
-            EXISTS (SELECT 1 FROM public.perfiles WHERE id = auth.uid() AND rol IN ('admin', 'direccion', 'mantenimiento'))
+            EXISTS (SELECT 1 FROM public.perfiles WHERE id = auth.uid() AND rol IN ('admin', 'direccion', 'mantenimiento', 'super_admin'))
         );
 
     CREATE POLICY "Solo admins pueden borrar controles" ON public.controles_agua
         FOR DELETE USING (
-            EXISTS (SELECT 1 FROM public.perfiles WHERE id = auth.uid() AND rol IN ('admin', 'direccion'))
+            EXISTS (SELECT 1 FROM public.perfiles WHERE id = auth.uid() AND rol IN ('admin', 'direccion', 'super_admin'))
         );
 EXCEPTION WHEN others THEN null; END $$;
 
