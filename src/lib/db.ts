@@ -1,101 +1,45 @@
-const DB_NAME = 'v-suite-db';
-const DB_VERSION = 1;
+import Dexie, { Table } from 'dexie';
 
-export interface OfflineSync {
+export interface OfflineMutation {
   id?: number;
-  table: string;
   action: 'insert' | 'update' | 'delete';
+  table: string;
   data: any;
-  timestamp: number;
+  hotel_id: string;
+  timestamp: string;
 }
 
-const openDB = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
-    request.onupgradeneeded = (event: any) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains('incidencias')) {
-        db.createObjectStore('incidencias', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('mantenimiento')) {
-        db.createObjectStore('mantenimiento', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('lecturas')) {
-        db.createObjectStore('lecturas', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('sync-queue')) {
-        db.createObjectStore('sync-queue', { keyPath: 'id', autoIncrement: true });
-      }
-    };
-  });
-};
+export interface OfflineCache {
+  id: string; // Puede ser el uuid de Supabase o uno temporal
+  table: string;
+  data: any;
+  hotel_id: string;
+  timestamp: string;
+}
 
-export const dbService = {
-  async getAll(storeName: string): Promise<any[]> {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(storeName, 'readonly');
-      const store = transaction.objectStore(storeName);
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  },
+export class AppDatabase extends Dexie {
+  offline_mutations!: Table<OfflineMutation>;
+  offline_cache!: Table<OfflineCache>;
 
-  async put(storeName: string, data: any): Promise<any> {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(storeName, 'readwrite');
-      const store = transaction.objectStore(storeName);
-      const request = store.put(data);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  },
-
-  async putBatch(storeName: string, dataArray: any[]): Promise<void> {
-    const db = await openDB();
-    const transaction = db.transaction(storeName, 'readwrite');
-    const store = transaction.objectStore(storeName);
-    dataArray.forEach(data => store.put(data));
-    return new Promise((resolve, reject) => {
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
-  },
-
-  async addToSyncQueue(syncData: OfflineSync): Promise<any> {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction('sync-queue', 'readwrite');
-      const store = transaction.objectStore('sync-queue');
-      const request = store.add(syncData);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  },
-
-  async getSyncQueue(): Promise<OfflineSync[]> {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction('sync-queue', 'readonly');
-      const store = transaction.objectStore('sync-queue');
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  },
-
-  async removeFromSyncQueue(id: number): Promise<void> {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction('sync-queue', 'readwrite');
-      const store = transaction.objectStore('sync-queue');
-      const request = store.delete(id);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+  constructor() {
+    super('HotelOpsOfflineDB');
+    this.version(1).stores({
+      offline_mutations: '++id, table, hotel_id, timestamp',
+      offline_cache: 'id, table, hotel_id, timestamp'
     });
   }
+}
+
+export const db = new AppDatabase();
+
+// Compatibilidad con SyncManager existente
+export const dbService = {
+  async getSyncQueue(): Promise<OfflineMutation[]> {
+    return await db.offline_mutations.toArray();
+  },
+  async removeFromSyncQueue(id: number) {
+    await db.offline_mutations.delete(id);
+  }
 };
+
+export type { OfflineMutation as OfflineSync };

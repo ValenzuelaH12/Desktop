@@ -1,6 +1,7 @@
-import { Bell, Search, Menu, X, AlertTriangle, Clock, ChevronRight } from 'lucide-react'
+import { Bell, Search, Menu, X, AlertTriangle, Clock, ChevronRight, Wifi, WifiOff, RefreshCw } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { db } from '../../lib/db'
 import { useNavigate } from 'react-router-dom'
 import { useNotifications } from '../../context/NotificationContext'
 import { MessageSquare } from 'lucide-react'
@@ -11,6 +12,8 @@ export default function Header({ toggleSidebar }) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(false)
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [pendingSyncCount, setPendingSyncCount] = useState(0)
   const { totalUnread: totalChatUnread, chatNotifications, dismissNotification, clearChannelUnread } = useNotifications()
   const [seenNotificationIds, setSeenNotificationIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('vsuite_seen_notifications')
@@ -80,8 +83,29 @@ export default function Header({ toggleSidebar }) {
   useEffect(() => {
     fetchNotifications()
     const interval = setInterval(fetchNotifications, 30000)
-    return () => clearInterval(interval)
+    
+    // Listeners de Red
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
   }, [seenNotificationIds])
+
+  useEffect(() => {
+    const fetchPendingCount = async () => {
+      const count = await db.offline_mutations.count();
+      setPendingSyncCount(count);
+    };
+    fetchPendingCount();
+    const interval = setInterval(fetchPendingCount, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Búsqueda con debounce
   useEffect(() => {
@@ -192,6 +216,27 @@ export default function Header({ toggleSidebar }) {
       </div>
 
       <div className="header-right">
+        {/* NETWORK STATUS INDICATOR */}
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isOnline ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]'}`}>
+          {isOnline ? (
+            <>
+              <Wifi size={14} />
+              <span className="text-[10px] font-black uppercase tracking-wider hidden md:block">Online</span>
+            </>
+          ) : (
+            <>
+              <WifiOff size={14} className="animate-pulse" />
+              <span className="text-[10px] font-black uppercase tracking-wider">Modo Offline</span>
+            </>
+          )}
+          {pendingSyncCount > 0 && (
+            <div className="flex items-center gap-1.5 pl-2 ml-2 border-l border-current">
+              <RefreshCw size={12} className="animate-spin" />
+              <span className="text-[10px] font-bold">{pendingSyncCount}</span>
+            </div>
+          )}
+        </div>
+
         <HotelSelector />
         <div className="relative">
           <button 
