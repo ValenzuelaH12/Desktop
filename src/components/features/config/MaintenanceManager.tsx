@@ -466,9 +466,10 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
                 <select value={newMaint.frecuencia} onChange={e => setNewMaint({...newMaint, frecuencia: e.target.value})} className="premium-select">
                   <option value="diario">Diario</option>
                   <option value="semanal">Semanal</option>
-                  <option value="mensual">Mensual</option>
-                  <option value="trimestral">Trimestral</option>
-                  <option value="semestral">Semestral</option>
+                    <option value="mensual">Mensual</option>
+                    <option value="trimestral">Trimestral</option>
+                    <option value="semestral">Semestral</option>
+                    <option value="anual">Anual</option>
                   <option value="anual">Anual</option>
                 </select>
               </div>

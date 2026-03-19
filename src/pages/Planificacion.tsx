@@ -833,6 +833,7 @@ export default function Planificacion() {
                     <option value="semanal">Semanal</option>
                     <option value="mensual">Mensual</option>
                     <option value="trimestral">Trimestral</option>
+                    <option value="semestral">Semestral</option>
                     <option value="anual">Anual</option>
                   </select>
                 </div>
