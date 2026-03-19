@@ -11,12 +11,13 @@ import {
   Activity,
   Calendar,
   Package,
-  BarChart3
+  BarChart3,
+  Building2
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 export default function Sidebar({ isOpen, closeSidebar }) {
-  const { signOut, profile } = useAuth()
+  const { signOut, profile, availableHotels } = useAuth()
 
   const handleSignOut = async () => {
     await signOut()
@@ -30,14 +31,16 @@ export default function Sidebar({ isOpen, closeSidebar }) {
     { id: 'chat', name: 'Chat', path: '/chat', icon: MessageSquare },
     { id: 'planificacion', name: 'Planificación', path: '/planificacion', icon: Calendar },
     { id: 'insights', name: 'V-Insights', path: '/insights', icon: BarChart3 },
+    { id: 'superadmin', name: 'Control de Cadena', path: '/superadmin', icon: Building2, hidden: availableHotels.length <= 1 && profile?.rol !== 'super_admin' },
     { id: 'configuracion', name: 'Configuración', path: '/configuracion', icon: Settings },
   ]
 
-  // Si no hay permisos definidos (usuario antiguo o error), mostramos por defecto los básicos
-  // Los admins siempre ven todo
-  const filteredItems = profile?.rol === 'admin' || profile?.rol === 'direccion' 
-    ? navItems 
-    : navItems.filter(item => profile?.permisos?.includes(item.id))
+  // Filtro de items según permisos
+  const filteredItems = navItems.filter(item => {
+    if (item.hidden) return false;
+    if (profile?.rol === 'admin' || profile?.rol === 'direccion' || profile?.rol === 'super_admin') return true;
+    return profile?.permisos?.includes(item.id);
+  });
 
   return (
     <aside className="sidebar glass border-r">

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Layout from './components/layout/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -14,6 +15,7 @@ import Inventory from './pages/Inventory'
 import VInsights from './pages/VInsights'
 import GuestPortal from './pages/GuestPortal'
 import AssetDetail from './pages/AssetDetail'
+import SuperAdmin from './pages/SuperAdmin'
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }) => {
@@ -42,7 +44,7 @@ const PermissionRoute = ({ children, moduleId }) => {
   if (loading) return null
   
   // Admins tienen acceso total
-  if (profile?.rol === 'admin' || profile?.rol === 'direccion') {
+  if (profile?.rol === 'admin' || profile?.rol === 'direccion' || profile?.rol === 'super_admin') {
     return children
   }
   
@@ -84,6 +86,7 @@ function AppRoutes() {
         </ProtectedRoute>
       }>
         <Route index element={<PermissionRoute moduleId="dashboard"><Dashboard /></PermissionRoute>} />
+        <Route path="superadmin" element={<PermissionRoute moduleId="superadmin"><SuperAdmin /></PermissionRoute>} />
         <Route path="incidencias" element={<PermissionRoute moduleId="incidencias"><Incidencias /></PermissionRoute>} />
         <Route path="chat" element={<PermissionRoute moduleId="chat"><Chat /></PermissionRoute>} />
         <Route path="controles" element={<Controles />} />
@@ -106,18 +109,29 @@ function AppRoutes() {
 import { ToastProvider } from './components/Toast'
 import { SyncManager } from './components/SyncManager'
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutos de caché por defecto
+      retry: 1,
+    },
+  },
+})
+
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <NotificationProvider>
-            <SyncManager />
-            <AppRoutes />
-          </NotificationProvider>
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <ToastProvider>
+            <NotificationProvider>
+              <SyncManager />
+              <AppRoutes />
+            </NotificationProvider>
+          </ToastProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }
 

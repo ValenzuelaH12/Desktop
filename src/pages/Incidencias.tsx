@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Plus, Filter, Search, MoreVertical, MapPin, Clock, X, CheckCircle, Image as ImageIcon, Video, Paperclip, MessageSquare, History, AlertCircle, RefreshCw, Download, FileText, FileSpreadsheet, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -9,6 +9,8 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 import { incidentService } from '../services/incidentService'
+import { useIncidents, useIncidentMutation } from '../hooks/useIncidents'
+import { useZones, useRooms, useIncidentTypes, useUsers } from '../hooks/useConfig'
 
 export default function Incidencias() {
   const { user, profile, activeHotelId } = useAuth()
@@ -18,15 +20,18 @@ export default function Incidencias() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const location = useLocation()
   const [newIncident, setNewIncident] = useState({ title: '', location: '', priority: 'medium', room: '', descripcion: '', media_urls: [], activo_id: null })
-  const [incidents, setIncidents] = useState([])
-  const [zonas, setZonas] = useState([])
-  const [habitaciones, setHabitaciones] = useState([])
-  const [tipos, setTipos] = useState([])
-  const [loading, setLoading] = useState(true)
+  
+  // React Query Hooks
+  const { data: incidents = [], isLoading: incidentsLoading, refetch: refetchIncidents } = useIncidents(activeHotelId)
+  const { data: zonas = [], isLoading: zonesLoading } = useZones(activeHotelId)
+  const { data: habitaciones = [], isLoading: roomsLoading } = useRooms(activeHotelId)
+  const { data: tipos = [], isLoading: typesLoading } = useIncidentTypes(activeHotelId)
+  const { data: staff = [], isLoading: staffLoading } = useUsers(activeHotelId)
+  const { createIncident, updateIncidentStatus } = useIncidentMutation()
+
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [staff, setStaff] = useState([])
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
@@ -64,47 +69,13 @@ export default function Incidencias() {
     }
   }, [location.state])
 
-  const fetchMetadata = async () => {
-    try {
-      let zReq = supabase.from('zonas').select('id, nombre').order('nombre')
-      let tReq = supabase.from('tipos_problemas').select('nombre').order('nombre')
-      let hReq = supabase.from('habitaciones').select('id, nombre, zona_id').order('nombre')
-      let sReq = supabase.from('perfiles').select('id, nombre, rol').in('rol', ['mantenimiento', 'limpieza', 'admin', 'direccion']).order('nombre')
-
-      if (activeHotelId) {
-        zReq = zReq.eq('hotel_id', activeHotelId)
-        hReq = hReq.eq('hotel_id', activeHotelId)
-        sReq = sReq.eq('hotel_id', activeHotelId)
-      }
-
-      const [zRes, tRes, hRes, sRes] = await Promise.all([zReq, tReq, hReq, sReq])
-      if (zRes.data) setZonas(zRes.data)
-      if (tRes.data) setTipos(tRes.data)
-      if (hRes.data) setHabitaciones(hRes.data)
-      if (sRes.data) setStaff(sRes.data)
-    } catch (error) { console.error(error) }
-  }
+  const fetchMetadata = async () => {}; // No-op placeholder
 
   const fetchIncidents = async () => {
-    try {
-      setLoading(true)
-      const data = await incidentService.getAll(activeHotelId)
-      
-      const formattedData = data.map(inc => ({
-        ...inc,
-        time: new Date(inc.created_at).toLocaleDateString(),
-        reporter: staff.find(s => s.id === inc.reporter_id)?.nombre || 'Desconocido',
-        assignee_name: staff.find(s => s.id === inc.assigned_to)?.nombre || 'Sin asignar'
-      }))
-      
-      setIncidents(formattedData)
-      await dbService.putBatch('incidencias', formattedData)
-    } catch (error) {
-      console.error('Error fetching incidents:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+    refetchIncidents();
+  };
+
+  const loading = incidentsLoading || zonesLoading || roomsLoading || typesLoading || staffLoading;
 
 
   const handleCreateIncident = async (e) => {
@@ -117,35 +88,47 @@ export default function Incidencias() {
       : newIncident.location
 
     try {
-      const payload: any = {
-        title: newIncident.title,
-        location: finalLocation,
-        priority: newIncident.priority,
-        status: 'pendiente',
-        descripcion: newIncident.descripcion || '',
-        media_urls: newIncident.media_urls || [],
-        reporter_id: user.id,
-        activo_id: newIncident.activo_id
+      if (activeHotelId) {
+        await createIncident.mutateAsync({
+          title: newIncident.title,
+          location: finalLocation,
+          priority: newIncident.priority as any,
+          status: 'pendiente' as any,
+          descripcion: newIncident.descripcion || '',
+          media_urls: newIncident.media_urls || [],
+          reporter_id: user.id,
+          activo_id: newIncident.activo_id,
+          hotel_id: activeHotelId,
+          created_at: new Date().toISOString()
+        })
+      } else {
+        // Si no hay hotelID (raro pero posible en super_admin), usamos supabase directo o manejamos el error
+        const { error } = await supabase.from('incidencias').insert([{
+          title: newIncident.title,
+          location: finalLocation,
+          priority: newIncident.priority,
+          status: 'pendiente',
+          descripcion: newIncident.descripcion || '',
+          media_urls: newIncident.media_urls || [],
+          reporter_id: user.id,
+          activo_id: newIncident.activo_id,
+          created_at: new Date().toISOString()
+        }])
+        if (error) throw error
       }
-      if (activeHotelId) payload.hotel_id = activeHotelId;
-
-      const { data: incidentData, error: incidentError } = await supabase
-        .from('incidencias')
-        .insert([payload])
-        .select()
-        .single()
-
-      if (incidentError) throw incidentError
       
-      toast.success('Incidencia reportada correctamente')
-      fetchIncidents()
       setIsModalOpen(false)
       setNewIncident({ title: '', location: '', priority: 'medium', room: '', descripcion: '', media_urls: [], activo_id: null })
-    } catch (error: any) {
-      console.error('Error creating incident:', error)
-      
-      // Soporte Offline: Cola de sincronización
+      toast.success('Incidencia creada correctamente')
+    } catch (error) {
+      console.error(error)
+      toast.error('Error al crear incidencia') // Changed from addToast to toast.error
+      // Soporte Offline: Cola de sincronización (re-added from original logic)
       try {
+        const finalLocation = newIncident.room 
+          ? `${newIncident.location} - Hab. ${newIncident.room}`
+          : newIncident.location
+
         const offlinePayload: any = {
           title: newIncident.title,
           location: finalLocation,
@@ -174,7 +157,16 @@ export default function Incidencias() {
     }
   }
 
-  const filteredIncidents = incidents.filter(inc => {
+  const formattedIncidents = useMemo(() => {
+    return incidents.map(inc => ({
+      ...inc,
+      time: new Date(inc.created_at).toLocaleDateString(),
+      reporter: staff.find((s: any) => s.id === inc.reporter_id)?.nombre || 'Desconocido',
+      assignee_name: staff.find((s: any) => s.id === inc.assigned_to)?.nombre || 'Sin asignar'
+    }))
+  }, [incidents, staff])
+
+  const filteredIncidents = formattedIncidents.filter(inc => {
     if (activeTab === 'activas') return inc.status !== 'resuelto'
     if (activeTab === 'resueltas') return inc.status === 'resuelto'
     return true
@@ -221,22 +213,14 @@ export default function Incidencias() {
 
   const handleUpdateStatus = async (id, newStatus) => {
     try {
-      let query = supabase
-        .from('incidencias')
-        .update({ status: newStatus })
-        .eq('id', id)
-      
-      if (activeHotelId) query = query.eq('hotel_id', activeHotelId)
-        
-      const { error } = await query
-        
-      if (error) throw error
-      fetchIncidents()
+      await updateIncidentStatus.mutateAsync({ id, status: newStatus })
+      toast.success('Estado actualizado')
       if (selectedIncident?.id === id) {
         setSelectedIncident(prev => ({ ...prev, status: newStatus }))
       }
     } catch (error) {
       console.error('Error updating status:', error)
+      toast.error('Error al actualizar estado')
     }
   }
 
@@ -248,13 +232,15 @@ export default function Incidencias() {
         .eq('id', incidentId)
       
       if (error) throw error
-      fetchIncidents()
+      refetchIncidents()
       if (selectedIncident?.id === incidentId) {
         const selectedStaff = staff.find(s => s.id === userId)
-        setSelectedIncident(prev => ({ ...prev, assignee_id: userId, assignee_name: selectedStaff?.nombre || 'Sin asignar' }))
+        setSelectedIncident(prev => ({ ...prev, assigned_to: userId, assignee_name: selectedStaff?.nombre || 'Sin asignar' }))
       }
+      toast.success('Personal asignado')
     } catch (error) {
       console.error('Error assigning incident:', error)
+      toast.error('Error al asignar')
     }
   }
 

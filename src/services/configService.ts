@@ -62,6 +62,16 @@ export const configService = {
     return data || [];
   },
 
+  async createGlobalIncidentType(entry: Partial<IncidentType>): Promise<IncidentType> {
+    const { data, error } = await supabase
+      .from('tipos_problemas')
+      .insert([{ ...entry, hotel_id: null }])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
   // Generic Create/Update/Delete (can be expanded)
   async create(table: string, entry: any, hotelId?: string | null): Promise<any> {
     const payload = hotelId ? { ...entry, hotel_id: hotelId } : entry;

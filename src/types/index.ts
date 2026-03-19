@@ -20,8 +20,8 @@ export interface Profile {
   permisos: string[];
 }
 
-export type IncidentStatus = 'pending' | 'in-progress' | 'resolved' | 'cancelled';
-export type IncidentPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type IncidentStatus = 'pending' | 'in-progress' | 'resolved' | 'cancelled' | 'pendiente' | 'revision' | 'proceso' | 'espera' | 'resuelto';
+export type IncidentPriority = 'low' | 'medium' | 'high' | 'urgent' | 'baja' | 'media' | 'alta' | 'urgente';
 
 export interface Incident {
   id: string;

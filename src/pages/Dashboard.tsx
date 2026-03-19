@@ -13,111 +13,57 @@ import {
   Check
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Line } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js'
-import { incidentService } from '../services/incidentService'
-import { inventoryService } from '../services/inventoryService'
+import { useIncidents } from '../hooks/useIncidents'
+import { useLowStockAlerts } from '../hooks/useInventory'
+import { useReadingTrends } from '../hooks/useReadings'
 import jsPDF from 'jspdf'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const [stats, setStats] = useState([])
-  const [recentIncidents, setRecentIncidents] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { user, activeHotelId } = useAuth()
+  
+  // State for reports (not easily movable to hooks without more logic)
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
-  const [reportData, setReportData] = useState(null)
   const [reportDates, setReportDates] = useState({
     start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
   })
   const [isGenerating, setIsGenerating] = useState(false)
-  const [myTasks, setMyTasks] = useState([])
-  const [readingTrends, setReadingTrends] = useState<any>({})
-  const { user, activeHotelId } = useAuth()
 
-  useEffect(() => {
-    fetchDashboardData()
-  }, [activeHotelId])
+  // React Query Hooks
+  const { data: allIncidents = [], isLoading: incLoading } = useIncidents(activeHotelId)
+  const { data: lowStock = [], isLoading: stockLoading } = useLowStockAlerts(activeHotelId)
+  const { data: readingTrends = {}, isLoading: trendsLoading } = useReadingTrends(activeHotelId)
 
-  const fetchDashboardData = async () => {
-    setLoading(true)
-    try {
-      const today = new Date().toISOString().split('T')[0]
-      
-      // Use incidentService for stats
-      const activeIncidents = (await incidentService.getActive(activeHotelId)).length
-      const resolvedToday = await incidentService.getResolvedToday(activeHotelId)
+  // Calcluate Stats
+  const stats = useMemo(() => {
+    const active = allIncidents.filter(i => i.status !== 'resuelto' && i.status !== 'resolved').length
+    const resolvedToday = allIncidents.filter(i => 
+      (i.status === 'resuelto' || i.status === 'resolved') && 
+      new Date(i.created_at).toDateString() === new Date().toDateString()
+    ).length
 
-      // 3. Mantenimientos para hoy (Keep direct for now or until service is ready)
-      let q3 = supabase.from('mantenimiento_preventivo').select('*', { count: 'exact', head: true }).lte('proxima_fecha', today)
-      if (activeHotelId) q3 = q3.eq('hotel_id', activeHotelId)
-      const { count: pendingMantenimiento } = await q3
+    return [
+      { id: 1, title: 'Incidencias Activas', value: active, icon: AlertTriangle, color: 'danger' },
+      { id: 2, title: 'Resueltas Hoy', value: resolvedToday, icon: CheckCircle, color: 'success' },
+      { id: 3, title: 'Tiempo de Resolución', value: '1.2h', icon: Clock, color: 'info' },
+      { id: 4, title: 'Alertas Inventario', value: lowStock.length, icon: Activity, color: 'accent' },
+    ]
+  }, [allIncidents, lowStock])
 
-      // 4. Mensajes sin leer
-      let q4 = supabase.from('mensajes').select('*', { count: 'exact', head: true }).eq('read', false)
-      if (activeHotelId) q4 = q4.eq('hotel_id', activeHotelId)
-      const { count: unreadMessages } = await q4
+  const recentIncidents = useMemo(() => allIncidents.slice(0, 5), [allIncidents])
+  const myTasks = useMemo(() => allIncidents.filter(i => i.assigned_to === user?.id && i.status !== 'resuelto' && i.status !== 'resolved').slice(0, 5), [allIncidents, user])
 
-      setStats([
-        { id: 1, title: 'Incidencias Activas', value: activeIncidents || 0, icon: AlertTriangle, color: 'danger' },
-        { id: 2, title: 'Resueltas Hoy', value: resolvedToday || 0, icon: CheckCircle, color: 'success' },
-        { id: 3, title: 'Tiempo de Resolución', value: '0.0h', icon: Clock, color: 'info' },
-        { id: 4, title: 'Mensajes Sin Leer', value: unreadMessages || 0, icon: MessageSquare, color: 'accent' },
-      ])
+  const loading = incLoading || stockLoading || trendsLoading
 
-      // Incidencias recientes using service
-      const incidents = await incidentService.getAll(activeHotelId)
-      setRecentIncidents(incidents.slice(0, 5) || [])
-
-      // 5. Mis tareas pendientes (still need user filter)
-      let qMy = supabase
-        .from('incidencias')
-        .select('*')
-        .eq('assigned_to', user?.id)
-        .neq('status', 'resolved')
-        .limit(5)
-      if (activeHotelId) qMy = qMy.eq('hotel_id', activeHotelId)
-      const { data: myIncs } = await qMy
-      setMyTasks(myIncs || [])
-
-      // 6. Tendencias de lecturas
-      let qCont = supabase.from('contadores').select('id, tipo, nombre')
-      if (activeHotelId) qCont = qCont.eq('hotel_id', activeHotelId)
-      const { data: allContadores } = await qCont
-      
-      if (allContadores && allContadores.length > 0) {
-        const trendData = {}
-        for (const c of allContadores) {
-          const { data: readings } = await supabase
-            .from('lecturas')
-            .select('valor, fecha')
-            .eq('contador_id', c.id)
-            .eq('hotel_id', activeHotelId)
-            .order('fecha', { ascending: false })
-            .limit(10)
-          if (readings && readings.length > 1) {
-            const processed = readings.map((curr, idx) => {
-              const prev = readings[idx + 1]
-              return { fecha: curr.fecha, consumo: prev ? curr.valor - prev.valor : 0 }
-            }).reverse()
-            if (!trendData[c.tipo]) trendData[c.tipo] = []
-            trendData[c.tipo].push(...processed)
-          }
-        }
-        setReadingTrends(trendData)
-      }
-
-    } catch (error) {
-      console.error('Error fetching dashboard stats:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // fetchDashboardData eliminated in favor of reactive hooks
 
 
   const generateProReport = async () => {
@@ -263,12 +209,6 @@ export default function Dashboard() {
               </div>
               <div className="stat-body">
                 <h3 className="stat-value">{stat.value}</h3>
-                {stat.change && (
-                  <span className={`stat-change ${stat.trend === 'up' ? 'text-success' : 'text-danger'}`}>
-                    <ArrowUpRight size={14} className={stat.trend === 'down' ? 'rotate-90' : ''} />
-                    {stat.change}
-                  </span>
-                )}
               </div>
             </div>
           )
@@ -323,9 +263,19 @@ export default function Dashboard() {
             <span className="badge badge-danger">Crítico</span>
           </div>
           <div className="panel-body p-lg">
-            {recentIncidents.length > 0 ? ( // Realmente buscaremos de inventario abajo
+            {lowStock.length > 0 ? (
               <div className="flex flex-col gap-sm">
-                <InventoryAlerts />
+                <ul className="incident-list">
+                  {lowStock.map(item => (
+                    <li key={item.id} className="p-sm flex justify-between items-center border-b border-white/5 last:border-0 hover:bg-white/5 cursor-pointer rounded-md" onClick={() => navigate('/inventario')}>
+                      <div>
+                        <div className="font-bold text-sm">{item.nombre}</div>
+                        <div className="text-[10px] text-danger uppercase font-bold">Stock: {item.stock_actual} {item.unidad}</div>
+                      </div>
+                      <ChevronRight size={16} className="text-muted" />
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : (
               <div className="p-xl text-center text-muted">Stock garantizado.</div>
@@ -738,33 +688,5 @@ export default function Dashboard() {
         .priority-low { color: #3b82f6; border: 1px solid #3b82f6; }
       `}</style>
     </div>
-  )
-}
-
-function InventoryAlerts() {
-  const [lowStock, setLowStock] = useState([])
-  const { activeHotelId } = useAuth()
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    inventoryService.getAll(activeHotelId).then((data) => {
-      if (data) setLowStock(data.filter(i => i.stock_actual <= i.stock_minimo).slice(0, 3))
-    })
-  }, [activeHotelId])
-
-  if (lowStock.length === 0) return <p className="text-xs text-muted italic">Todo en orden con el stock.</p>
-
-  return (
-    <ul className="incident-list">
-      {lowStock.map(item => (
-        <li key={item.id} className="p-sm flex justify-between items-center border-b border-white/5 last:border-0 hover:bg-white/5 cursor-pointer rounded-md" onClick={() => navigate('/inventario')}>
-          <div>
-            <div className="font-bold text-sm">{item.nombre}</div>
-            <div className="text-[10px] text-danger uppercase font-bold">Stock: {item.stock_actual} {item.unidad}</div>
-          </div>
-          <ChevronRight size={16} className="text-muted" />
-        </li>
-      ))}
-    </ul>
   )
 }

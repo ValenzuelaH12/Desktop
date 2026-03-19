@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabase'
 
 import { Profile, Hotel } from '../types'
 
+import { User } from '@supabase/supabase-js'
+
 interface AuthContextType {
-  user: any;
+  user: User | null;
   profile: Profile | null;
   loading: boolean;
   activeHotelId: string | null;
-  setActiveHotelId: (id: string) => void;
+  setActiveHotelId: (id: string | null) => void;
   availableHotels: Hotel[];
   refreshHotels: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ data: any; error: any }>;
@@ -18,7 +20,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({} as AuthContextType)
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeHotelId, setActiveHotelId] = useState<string | null>(null)

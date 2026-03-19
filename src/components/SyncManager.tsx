@@ -32,7 +32,9 @@ export const SyncManager = () => {
     const queue = await dbService.getSyncQueue()
     if (queue.length === 0) return
 
-    console.log(`Iniciando sincronización de ${queue.length} elementos...`)
+    console.log(`[SyncManager] Sincronizando ${queue.length} elementos...`)
+    let successCount = 0
+    let failCount = 0
     
     for (const item of queue) {
       try {
@@ -42,22 +44,36 @@ export const SyncManager = () => {
           const { error: insertError } = await supabase.from(item.table).insert([item.data])
           error = insertError
         } else if (item.action === 'update') {
-          const { error: updateError } = await supabase.from(item.table).update(item.data).eq('id', item.data.id)
+          // Si hay una tabla específica con ID, lo usamos. 
+          // En Supabase, update necesita un filtro.
+          const id = item.data.id
+          const { error: updateError } = await supabase.from(item.table).update(item.data).eq('id', id)
           error = updateError
+        } else if (item.action === 'delete') {
+          const id = item.data.id
+          const { error: deleteError } = await supabase.from(item.table).delete().eq('id', id)
+          error = deleteError
         }
 
         if (!error) {
           await dbService.removeFromSyncQueue(item.id!)
-          console.log(`Elemento ${item.id} sincronizado con éxito.`)
+          successCount++
         } else {
-          console.error(`Error sincronizando elemento ${item.id}:`, error)
+          console.error(`[SyncManager] Error en elemento ${item.id} (${item.table}):`, error)
+          failCount++
         }
       } catch (err) {
-        console.error(`Fallo crítico en sincronización de elemento ${item.id}:`, err)
+        console.error(`[SyncManager] Fallo crítico en elemento ${item.id}:`, err)
+        failCount++
       }
     }
 
-    toast.success('Sincronización finalizada. Todos los datos están al día.')
+    if (successCount > 0) {
+      toast.success(`Sincronización: ${successCount} cambios enviados correctamente.`)
+    }
+    if (failCount > 0) {
+      toast.error(`Sincronización: ${failCount} elementos fallaron. Se reintentarán más tarde.`)
+    }
   }
 
   return null // Componente puramente lógico

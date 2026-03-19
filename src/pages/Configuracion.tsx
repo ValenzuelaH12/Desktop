@@ -14,7 +14,9 @@ import { NexusConfig } from '../components/features/config/NexusConfig';
 import { SettingsManager } from '../components/features/config/SettingsManager';
 import { HotelManager } from '../components/features/config/HotelManager';
 import { IncidentTypeManager } from '../components/features/config/IncidentTypeManager';
-import { configService as configApi } from '../services/configService';
+import { 
+  useUsers, useZones, useRooms, useAssets, useCounters, useIncidentTypes 
+} from '../hooks/useConfig';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 
@@ -39,63 +41,54 @@ export default function Configuracion() {
     // Insertar Hoteles al principio
     configTabs.unshift({ id: 'hoteles', name: 'Hoteles', icon: Building2 });
   }
-  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<{ type: 'success' | 'error' | '', text: string }>({ type: '', text: '' });
   
-  // Centralized data state
-  const [data, setData] = useState({
-    users: [],
-    zonas: [],
-    habitaciones: [],
-    activos: [],
-    contadores: [],
-    mantenimiento: [],
-    plantillas: [],
-    tipos: []
-  });
+  const { data: users = [], isLoading: usersLoading, refetch: refetchUsers } = useUsers(activeHotelId);
+  const { data: zonas = [], isLoading: zonesLoading, refetch: refetchZones } = useZones(activeHotelId);
+  const { data: habitaciones = [], isLoading: roomsLoading, refetch: refetchRooms } = useRooms(activeHotelId);
+  const { data: activos = [], isLoading: assetsLoading, refetch: refetchAssets } = useAssets(activeHotelId);
+  const { data: contadores = [], isLoading: countersLoading, refetch: refetchCounters } = useCounters(activeHotelId);
+  const { data: tipos = [], isLoading: typesLoading, refetch: refetchIncidentTypes } = useIncidentTypes(activeHotelId);
+  
+  // Mantenimiento aún usa supabase directamente por ahora, o podemos centralizarlo luego
+  const [maintenance, setMaintenance] = useState([]);
+  const [plantillas, setPlantillas] = useState([]);
+  const [maintLoading, setMaintLoading] = useState(false);
 
-  const fetchAll = async () => {
-    setLoading(true);
-    try {
-      const [users, zonas, habitaciones, activos, contadores, tipos, mantenimiento, plantillas] = await Promise.all([
-        configApi.getUsers(activeHotelId),
-        configApi.getZones(activeHotelId),
-        configApi.getRooms(activeHotelId),
-        configApi.getAssets(activeHotelId),
-        configApi.getCounters(activeHotelId),
-        configApi.getIncidentTypes(activeHotelId),
-        supabase.from('mantenimiento_preventivo').select('*').eq('hotel_id', activeHotelId).order('frecuencia'),
-        supabase.from('mantenimiento_plantillas').select('*').eq('hotel_id', activeHotelId).order('nombre')
-      ]);
-
-      setData({
-        users,
-        zonas,
-        habitaciones,
-        activos,
-        contadores,
-        tipos,
-        mantenimiento: mantenimiento.data || [],
-        plantillas: plantillas.data || []
-      });
-    } catch (error) {
-      console.error(error);
-      setMsg({ type: 'error', text: 'Error al sincronizar datos' });
-    } finally {
-      setLoading(false);
-    }
+  const fetchMaint = async () => {
+    if (!activeHotelId) return;
+    setMaintLoading(true);
+    const [m, p] = await Promise.all([
+      supabase.from('mantenimiento_preventivo').select('*').eq('hotel_id', activeHotelId).order('frecuencia'),
+      supabase.from('mantenimiento_plantillas').select('*').eq('hotel_id', activeHotelId).order('nombre')
+    ]);
+    setMaintenance(m.data || []);
+    setPlantillas(p.data || []);
+    setMaintLoading(false);
   };
 
   useEffect(() => {
-    fetchAll();
+    fetchMaint();
   }, [activeHotelId]);
+
+  const loading = usersLoading || zonesLoading || roomsLoading || assetsLoading || countersLoading || typesLoading || maintLoading;
+  
+  const fetchAll = () => {
+    refetchUsers();
+    refetchZones();
+    refetchRooms();
+    refetchAssets();
+    refetchCounters();
+    refetchIncidentTypes();
+    fetchMaint();
+  };
 
   const showMsg = (m: { type: 'success' | 'error', text: string }) => {
     setMsg(m);
     setTimeout(() => setMsg({ type: '', text: '' }), 4000);
   };
 
-  if (loading && data.users.length === 0) {
+  if (loading && users.length === 0) {
     return (
       <div className="flex items-center justify-center min-height-screen">
         <div className="animate-spin h-8 w-8 border-4 border-accent border-t-transparent rounded-full" />
@@ -165,15 +158,15 @@ export default function Configuracion() {
               currentUserProfile={profile} 
               onMessage={showMsg} 
               activeHotelId={activeHotelId}
-              users={data.users}
+              users={users}
               onRefresh={fetchAll}
             />
           )}
           
           {activeTab === 'zonas' && (
             <ZoneManager 
-              zones={data.zonas} 
-              rooms={data.habitaciones} 
+              zones={zonas} 
+              rooms={habitaciones} 
               onMessage={showMsg} 
               onRefresh={fetchAll} 
               activeHotelId={activeHotelId}
@@ -182,8 +175,8 @@ export default function Configuracion() {
 
           {activeTab === 'activos' && (
             <AssetManager 
-              zones={data.zonas} 
-              assets={data.activos}
+              zones={zonas} 
+              assets={activos}
               activeHotelId={activeHotelId}
               onMessage={showMsg} 
               onRefresh={fetchAll}
@@ -192,7 +185,7 @@ export default function Configuracion() {
 
           {activeTab === 'incidencias' && (
             <IncidentTypeManager 
-              types={data.tipos} 
+              types={tipos} 
               onMessage={showMsg} 
               onRefresh={fetchAll} 
               activeHotelId={activeHotelId}
@@ -201,7 +194,7 @@ export default function Configuracion() {
 
           {activeTab === 'contadores' && (
             <MeterManager 
-              counters={data.contadores} 
+              counters={contadores} 
               onMessage={showMsg} 
               onRefresh={fetchAll} 
               activeHotelId={activeHotelId}
@@ -210,8 +203,8 @@ export default function Configuracion() {
 
           {activeTab === 'mantenimiento' && (
             <MaintenanceManager 
-              maintenance={data.mantenimiento} 
-              templates={data.plantillas} 
+              maintenance={maintenance} 
+              templates={plantillas} 
               onMessage={showMsg} 
               onRefresh={fetchAll} 
               activeHotelId={activeHotelId}
@@ -220,8 +213,8 @@ export default function Configuracion() {
 
           {activeTab === 'v-nexus' && (
             <NexusConfig 
-              rooms={data.habitaciones} 
-              zones={data.zonas} 
+              rooms={habitaciones} 
+              zones={zonas} 
               activeHotelId={activeHotelId}
             />
           )}
