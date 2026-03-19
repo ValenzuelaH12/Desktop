@@ -92,7 +92,8 @@ export default function Planificacion() {
     foto_url: '', 
     checklist_items: [] as string[],
     entidad_objetivo: 'habitaciones',
-    activo_id: ''
+    activo_id: '',
+    entidades_especificas: [] as string[]
   })
   const [assets, setAssets] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
@@ -176,7 +177,8 @@ export default function Planificacion() {
       foto_url: '',
       checklist_items: [],
       entidad_objetivo: 'habitaciones',
-      activo_id: ''
+      activo_id: '',
+      entidades_especificas: []
     })
   }
 
@@ -194,6 +196,7 @@ export default function Planificacion() {
         checklist_items: newForm.checklist_items,
         entidad_objetivo: newForm.entidad_objetivo,
         activo_id: (newForm.entidad_objetivo === 'activo_individual' && newForm.activo_id) ? newForm.activo_id : null,
+        entidades_especificas: newForm.entidades_especificas?.length > 0 ? newForm.entidades_especificas : null,
         hotel_id: activeHotelId
       }
 
@@ -1036,20 +1039,38 @@ export default function Planificacion() {
                   </div>
                 </div>
 
-                {newForm.entidad_objetivo === 'activo_individual' && (
-                  <div className="input-group mb-md animate-in slide-in-from-top-2 duration-300">
-                    <label className="input-label text-accent">Seleccionar Equipo / Activo</label>
-                    <select 
-                      className="select border-accent/20 bg-accent/5"
-                      value={newForm.activo_id}
-                      onChange={e => setNewForm({...newForm, activo_id: e.target.value})}
-                      required
-                    >
-                      <option value="">Elegir activo...</option>
-                      {assets.map(a => (
-                        <option key={a.id} value={a.id}>{a.nombre} ({a.tipo})</option>
-                      ))}
-                    </select>
+                {newForm.entidad_objetivo === 'habitaciones' && (
+                  <div className="input-group mb-md">
+                    <label className="input-label flex justify-between items-center">
+                      <span>Selección de Unidades</span>
+                      <span className="text-[10px] text-muted uppercase tracking-widest">{newForm.entidades_especificas.length > 0 ? `${newForm.entidades_especificas.length} seleccionadas` : 'Todas activas'}</span>
+                    </label>
+                    <div className="flex flex-col gap-2 p-3 bg-white/5 border border-white/10 rounded-2xl max-h-[180px] overflow-y-auto custom-scrollbar">
+                      <div className="flex flex-wrap gap-2">
+                         {rooms.map(room => (
+                           <button
+                             key={room.id}
+                             type="button"
+                             onClick={() => {
+                               const current = newForm.entidades_especificas || [];
+                               if (current.includes(room.id)) {
+                                 setNewForm({...newForm, entidades_especificas: current.filter(id => id !== room.id)});
+                               } else {
+                                 setNewForm({...newForm, entidades_especificas: [...current, room.id]});
+                               }
+                             }}
+                             className={`px-3 py-1.5 rounded-xl text-[10px] font-black tracking-widest border transition-all ${
+                               newForm.entidades_especificas.includes(room.id)
+                                 ? 'bg-accent border-accent text-white shadow-lg'
+                                 : 'bg-white/5 border-white/10 text-muted hover:border-white/20'
+                             }`}
+                           >
+                             {room.nombre}
+                           </button>
+                         ))}
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted/60 mt-2 italic px-1">Si no seleccionas ninguna, se incluirán todas automáticamente.</p>
                   </div>
                 )}
                 <div className="input-group mb-md">
@@ -1312,7 +1333,10 @@ export default function Planificacion() {
                     <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-[460px] overflow-y-auto pr-md custom-scrollbar custom-grid-animate pb-4">
                       {(completingTask?.entidad_objetivo === 'activo_individual' 
                         ? assets.filter(a => a.id === completingTask.activo_id)
-                        : rooms
+                        : (completingTask?.entidades_especificas?.length > 0
+                          ? rooms.filter(r => completingTask.entidades_especificas.includes(r.id))
+                          : rooms
+                        )
                       )
                         .filter(r => (r.nombre || r.titulo || '').toLowerCase().includes(searchTerm.toLowerCase()))
                         .filter(r => {
