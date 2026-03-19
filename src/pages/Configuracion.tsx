@@ -10,6 +10,7 @@ import { AssetManager } from '../components/features/config/AssetManager';
 import { ZoneManager } from '../components/features/config/ZoneManager';
 import { MeterManager } from '../components/features/config/MeterManager';
 import { NexusConfig } from '../components/features/config/NexusConfig';
+import { PreventiveManager } from '../components/features/config/PreventiveManager';
 import { SettingsManager } from '../components/features/config/SettingsManager';
 import { HotelManager } from '../components/features/config/HotelManager';
 import { IncidentTypeManager } from '../components/features/config/IncidentTypeManager';
@@ -25,6 +26,7 @@ const TABS = [
   { id: 'activos', name: 'Activos / QR', icon: Package },
   { id: 'incidencias', name: 'Tipos Incidencias', icon: Activity },
   { id: 'contadores', name: 'Contadores', icon: Activity },
+  { id: 'preventivos', name: 'Preventivos', icon: ShieldCheck },
   { id: 'v-nexus', name: 'V-Nexus', icon: Smartphone },
   { id: 'ajustes', name: 'Ajustes', icon: Settings },
 ];
@@ -48,7 +50,23 @@ export default function Configuracion() {
   const { data: contadores = [], isLoading: countersLoading, refetch: refetchCounters } = useCounters(activeHotelId);
   const { data: tipos = [], isLoading: typesLoading, refetch: refetchIncidentTypes } = useIncidentTypes(activeHotelId);
   
-  const loading = usersLoading || zonesLoading || roomsLoading || assetsLoading || countersLoading || typesLoading;
+  // Planes Preventivos
+  const [planes, setPlanes] = useState([]);
+  const [planesLoading, setPlanesLoading] = useState(false);
+
+  const fetchPlanes = async () => {
+    if (!activeHotelId) return;
+    setPlanesLoading(true);
+    const { data } = await supabase.from('mantenimiento_planes').select('*').eq('hotel_id', activeHotelId).order('nombre');
+    setPlanes(data || []);
+    setPlanesLoading(false);
+  };
+
+  useEffect(() => {
+    fetchPlanes();
+  }, [activeHotelId]);
+
+  const loading = usersLoading || zonesLoading || roomsLoading || assetsLoading || countersLoading || typesLoading || planesLoading;
   
   const fetchAll = () => {
     refetchUsers();
@@ -179,6 +197,15 @@ export default function Configuracion() {
               counters={contadores} 
               onMessage={showMsg} 
               onRefresh={fetchAll} 
+              activeHotelId={activeHotelId}
+            />
+          )}
+
+          {activeTab === 'preventivos' && (
+            <PreventiveManager 
+              planes={planes} 
+              onMessage={showMsg} 
+              onRefresh={fetchPlanes} 
               activeHotelId={activeHotelId}
             />
           )}
