@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClipboardList, Plus, Trash2, Calendar, Activity, CheckCircle, Clock, Layers, X, Repeat } from 'lucide-react';
+import { ClipboardList, Plus, Trash2, Calendar, Activity, CheckCircle, Clock, Layers, X, Repeat, ChevronRight, ChevronLeft, Circle, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { configService } from '../../../services/configService';
 import { Card } from '../../ui/Card';
@@ -15,14 +15,6 @@ interface MaintenanceManagerProps {
   onRefresh: () => void;
   activeHotelId: string | null;
 }
-
-const CATEGORIES: Record<string, string[]> = {
-  'Zonas Comunes': ['Recepción', 'Pasillos', 'Aseos Públicos', 'Fachada', 'Piscina', 'Gimnasio'],
-  'Habitaciones': ['Mobiliario', 'Colchones/Camas', 'Grifería Baño', 'Mini-bar', 'Iluminación', 'Climatización'],
-  'Maquinaria/Filtros': ['Filtros HVAC', 'Bombas de Agua', 'Filtros Piscina', 'Calderas', 'Ascensores'],
-  'Electricidad': ['Cuadros Eléctricos', 'Emergencias', 'Iluminación Exterior', 'Generador'],
-  'Fontanería': ['Tuberías General', 'Bombas Presión', 'Desagües', 'Depósitos']
-};
 
 export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ 
   maintenance, 
@@ -48,13 +40,136 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
     proxima_fecha: new Date().toISOString().split('T')[0],
     categoria: '',
     subcategoria: '',
+    checklist_items: [] as string[],
     hotel_id: activeHotelId || ''
   });
+
+  const [newCheckItem, setNewCheckItem] = useState('');
 
   const [newCat, setNewCat] = useState({ nombre: '', subcategorias: [] as string[] });
   const [newSubItem, setNewSubItem] = useState('');
 
-  // Fetch categories
+  // Execution State
+  const [executingTask, setExecutingTask] = useState<any | null>(null);
+  const [executionId, setExecutionId] = useState<string | null>(null);
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [loadingRooms, setLoadingRooms] = useState(false);
+  const [inspectedRooms, setInspectedRooms] = useState<Record<string, any>>({});
+  const [selectedRoom, setSelectedRoom] = useState<any | null>(null);
+  const [inspectionChecklist, setInspectionChecklist] = useState<any[]>([]);
+
+  // Fetch rooms for execution
+  const fetchRooms = async () => {
+    setLoadingRooms(true);
+    try {
+      const { data, error } = await supabase
+        .from('habitaciones')
+        .select('*, zonas(nombre)')
+        .eq('hotel_id', activeHotelId)
+        .order('nombre');
+      if (error) throw error;
+      setRooms(data || []);
+    } catch (e) {
+      console.error('Error fetching rooms:', e);
+    } finally {
+      setLoadingRooms(false);
+    }
+  };
+
+  const startExecution = async (task: any) => {
+    try {
+      const { data, error } = await supabase
+        .from('mantenimiento_ejecucion')
+        .insert([{
+          tarea_id: task.id,
+          hotel_id: activeHotelId,
+          tecnico_id: (await supabase.auth.getUser()).data.user?.id,
+          estado: 'in_progress'
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      setExecutionId(data.id);
+      setExecutingTask(task);
+      fetchRooms();
+      onMessage({ type: 'success', text: `Ejecución iniciada: ${task.titulo}` });
+    } catch (e: any) {
+      onMessage({ type: 'error', text: 'Error al iniciar ejecución: ' + e.message });
+    }
+  };
+
+  const handleOpenInspection = (room: any) => {
+    setSelectedRoom(room);
+    const existing = inspectedRooms[room.id];
+    if (existing) {
+      setInspectionChecklist(existing.checklist);
+    } else {
+      // Prioritize task-specific checklist items, fallback to category subcategories
+      const checklist = executingTask?.checklist_items?.length > 0 
+        ? executingTask.checklist_items 
+        : (dbCategories.find(c => c.nombre === executingTask?.categoria)?.subcategorias || []);
+      
+      setInspectionChecklist(checklist.map((name: string) => ({ name, status: 'ok' })));
+    }
+  };
+
+  const handleToggleItem = (index: number) => {
+    const updated = [...inspectionChecklist];
+    updated[index].status = updated[index].status === 'ok' ? 'issue' : 'ok';
+    setInspectionChecklist(updated);
+  };
+
+  const handleSaveInspection = async () => {
+    if (!selectedRoom || !executionId) return;
+    const hasIssue = inspectionChecklist.some(i => i.status === 'issue');
+    const status = hasIssue ? 'issue' : 'ok';
+    try {
+      const { error } = await supabase
+        .from('mantenimiento_entidades')
+        .insert([{
+          ejecucion_id: executionId,
+          entidad_id: selectedRoom.id,
+          entidad_nombre: selectedRoom.nombre,
+          entidad_tipo: 'habitacion',
+          estado: status,
+          checklist_resultados: inspectionChecklist,
+          hotel_id: activeHotelId
+        }]);
+      if (error) throw error;
+      setInspectedRooms(prev => ({
+        ...prev,
+        [selectedRoom.id]: { status, checklist: inspectionChecklist }
+      }));
+      setSelectedRoom(null);
+      onMessage({ type: 'success', text: `Revisión guardada: ${selectedRoom.nombre}` });
+    } catch (e: any) {
+      onMessage({ type: 'error', text: 'Error al guardar revisión: ' + e.message });
+    }
+  };
+
+  const finishExecution = async () => {
+    if (!executionId) return;
+    try {
+      const { error } = await supabase
+        .from('mantenimiento_ejecucion')
+        .update({
+          estado: 'completed',
+          completado_at: new Date().toISOString()
+        })
+        .eq('id', executionId);
+      if (error) throw error;
+      setExecutingTask(null);
+      setExecutionId(null);
+      setInspectedRooms({});
+      onRefresh();
+      onMessage({ type: 'success', text: 'Mantenimiento finalizado con éxito.' });
+    } catch (e: any) {
+      onMessage({ type: 'error', text: 'Error al finalizar: ' + e.message });
+    }
+  };
+
   const fetchCategories = async () => {
     setLoadingCats(true);
     try {
@@ -87,7 +202,6 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
     setNewTemplateItem('');
   };
 
-  // Sync hotel_id when activeHotelId changes
   React.useEffect(() => {
     if (activeHotelId) {
       setNewMaint(prev => ({ ...prev, hotel_id: activeHotelId }));
@@ -108,6 +222,7 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
         proxima_fecha: new Date().toISOString().split('T')[0], 
         categoria: '',
         subcategoria: '',
+        checklist_items: [],
         hotel_id: activeHotelId || ''
       });
       onRefresh();
@@ -134,10 +249,9 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
     e.preventDefault();
     if (!newCat.nombre.trim()) return;
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('mantenimiento_categorias')
-        .insert([{ ...newCat, hotel_id: activeHotelId }])
-        .select();
+        .insert([{ ...newCat, hotel_id: activeHotelId }]);
       if (error) throw error;
       onMessage({ type: 'success', text: 'Categoría creada.' });
       setNewCat({ nombre: '', subcategorias: [] });
@@ -163,31 +277,17 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
     }
   };
 
-  const handleUpdateCategory = async (id: string, updates: any) => {
-    try {
-      const { error } = await supabase
-        .from('mantenimiento_categorias')
-        .update(updates)
-        .eq('id', id);
-      if (error) throw error;
-      fetchCategories();
-    } catch (error: any) {
-      onMessage({ type: 'error', text: error.message });
-    }
-  };
-
   const stats = {
     total: maintenance.length,
     templates: templates.length,
     urgent: maintenance.filter(m => {
       const diff = new Date(m.proxima_fecha).getTime() - new Date().getTime();
-      return diff < 86400000 * 3; // 3 days
+      return diff < 86400000 * 3;
     }).length
   };
 
   return (
     <div className="maintenance-redesign animate-fade-in flex flex-col gap-xl">
-      {/* Stats Bar */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
         <Card className="p-md relative overflow-hidden group hover-glow transition-all">
           <div className="flex items-center gap-md">
@@ -198,9 +298,6 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
               <p className="text-xs font-bold text-muted uppercase tracking-tighter">Programas Activos</p>
               <h4 className="text-2xl font-black text-white">{stats.total}</h4>
             </div>
-          </div>
-          <div className="absolute -right-4 -bottom-4 opacity-5 rotate-12 group-hover:scale-125 transition-all">
-            <Calendar size={80} />
           </div>
         </Card>
         
@@ -214,9 +311,6 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
               <h4 className="text-2xl font-black text-white">{stats.templates}</h4>
             </div>
           </div>
-          <div className="absolute -right-4 -bottom-4 opacity-5 rotate-12 group-hover:scale-125 transition-all">
-            <ClipboardList size={80} />
-          </div>
         </Card>
 
         <Card className="p-md relative overflow-hidden group hover-glow transition-all">
@@ -229,590 +323,256 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({
               <h4 className={`text-2xl font-black ${stats.urgent > 0 ? 'text-orange-400' : 'text-green-400'}`}>{stats.urgent}</h4>
             </div>
           </div>
-          <div className="absolute -right-4 -bottom-4 opacity-5 rotate-12 group-hover:scale-125 transition-all">
-            <Activity size={80} />
-          </div>
         </Card>
       </div>
 
       <div className="flex flex-col md:flex-row justify-between items-center gap-md">
         <div className="flex p-1 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-md">
-          <button 
-            onClick={() => setActiveSubTab('tareas')}
-            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeSubTab === 'tareas' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-muted hover:text-white'}`}
-          >
+          <button onClick={() => setActiveSubTab('tareas')} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeSubTab === 'tareas' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-muted hover:text-white'}`}>
             <Calendar size={18} /> Tareas Programadas
           </button>
-          <button 
-            onClick={() => setActiveSubTab('plantillas')}
-            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeSubTab === 'plantillas' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-muted hover:text-white'}`}
-          >
+          <button onClick={() => setActiveSubTab('plantillas')} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeSubTab === 'plantillas' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-muted hover:text-white'}`}>
             <ClipboardList size={18} /> Plantillas
           </button>
-          <button 
-            onClick={() => setActiveSubTab('categorias')}
-            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeSubTab === 'categorias' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-muted hover:text-white'}`}
-          >
+          <button onClick={() => setActiveSubTab('categorias')} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeSubTab === 'categorias' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-muted hover:text-white'}`}>
             <Layers size={18} /> Categorías
           </button>
         </div>
         
         <div className="flex gap-md">
-          {activeSubTab === 'categorias' && (
-            <Button 
-              variant="secondary" 
-              onClick={() => setIsManagingCats(true)}
-              icon={Plus}
-            >
-              Nueva Categoría
-            </Button>
-          )}
-          <Button 
-            variant="primary" 
-            onClick={() => activeSubTab === 'tareas' ? setIsAddingMaint(true) : activeSubTab === 'plantillas' ? setIsAddingTemplate(true) : setIsManagingCats(true)}
-            icon={Plus}
-            className="shadow-xl"
-          >
+          <Button variant="primary" onClick={() => activeSubTab === 'tareas' ? setIsAddingMaint(true) : activeSubTab === 'plantillas' ? setIsAddingTemplate(true) : setIsManagingCats(true)} icon={Plus}>
             {activeSubTab === 'tareas' ? 'Nueva Tarea' : activeSubTab === 'plantillas' ? 'Nueva Plantilla' : 'Añadir Categoría'}
           </Button>
         </div>
       </div>
 
-      {activeSubTab === 'tareas' ? (
+      {executingTask ? (
+        <div className="animate-fade-in">
+          <div className="flex justify-between items-center mb-xl bg-indigo-500/10 p-lg rounded-3xl border border-indigo-500/20 backdrop-blur-xl">
+             <div className="flex items-center gap-lg">
+                <div className="p-3 bg-indigo-500 text-white rounded-2xl">
+                   <Activity size={24} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-white">{executingTask.titulo}</h2>
+                  <p className="text-xs text-muted font-bold uppercase">{rooms.length} HABITACIONES TOTALES</p>
+                </div>
+             </div>
+             <button onClick={finishExecution} className="px-8 py-3 bg-white text-black font-black rounded-2xl hover:scale-105 transition-all">
+               FINALIZAR SESIÓN
+             </button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {rooms.map(room => {
+              const inspection = inspectedRooms[room.id];
+              return (
+                <button
+                  key={room.id}
+                  onClick={() => handleOpenInspection(room)}
+                  className={`relative p-lg rounded-3xl border transition-all flex flex-col items-center gap-2 group ${
+                    inspection?.status === 'ok' ? 'bg-emerald-500/10 border-emerald-500/30' : 
+                    inspection?.status === 'issue' ? 'bg-orange-500/10 border-orange-500/30' : 
+                    'bg-white/5 border-white/5 hover:border-white/20'
+                  }`}
+                >
+                  <div className={`p-3 rounded-2xl ${inspection?.status === 'ok' ? 'bg-emerald-500 text-white' : inspection?.status === 'issue' ? 'bg-orange-500 text-white' : 'bg-white/5 text-muted'}`}>
+                    {inspection?.status === 'issue' ? <AlertTriangle size={24} /> : <ShieldCheck size={24} />}
+                  </div>
+                  <span className="text-xl font-black text-white">{room.nombre}</span>
+                  {inspection && <div className="absolute top-2 right-2"><CheckCircle size={14} className={inspection.status === 'ok' ? 'text-emerald-400' : 'text-orange-400'} /></div>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : activeSubTab === 'tareas' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {maintenance.map(m => (
-            <Card key={m.id} className="maintenance-card group hover-scale p-none relative overflow-hidden border-white/5 bg-black/40 backdrop-blur-sm">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              
-              <div className="p-xl">
-                <div className="flex justify-between items-start mb-lg">
-                  <div className={`p-3 rounded-2xl bg-indigo-500/10 text-indigo-400`}>
-                    <Calendar size={24} />
-                  </div>
-                  <Badge variant="success" className="px-3 py-1 text-[10px] font-black tracking-widest bg-emerald-500/10 text-emerald-400 border-none">
-                    ACTIVO
-                  </Badge>
-                </div>
-                
-                <h4 className="text-xl font-black text-white mb-xs group-hover:text-indigo-300 transition-colors uppercase tracking-tight">{m.titulo}</h4>
-                <p className="text-xs text-muted leading-relaxed line-clamp-2 mb-xl min-h-[32px]">
-                  {m.descripcion || 'Sin descripción adicional para este programa.'}
-                </p>
-                
-                <div className="flex items-center justify-between p-md bg-white/5 rounded-2xl border border-white/5">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-muted mb-1">Próxima Ejecución</span>
-                    <span className="text-sm font-black text-white">{new Date(m.proxima_fecha).toLocaleDateString(undefined, { day: '2-digit', month: 'long' })}</span>
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-[10px] uppercase font-bold text-muted mb-1 tracking-tighter">Frecuencia</span>
-                    <Badge variant="neutral" className="bg-indigo-500/20 text-indigo-300 border-none font-black text-[10px]">
-                      {m.frecuencia?.toUpperCase()}
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="mt-xl flex justify-between items-center opacity-40 group-hover:opacity-100 transition-opacity">
-                  <div className="flex items-center gap-2 text-xs text-muted font-bold">
-                    <CheckCircle size={14} className="text-emerald-400" />
-                    <span>Vinculado a: {templates.find(t => t.id === m.plantilla_id)?.nombre || 'Checklist General'}</span>
-                  </div>
-                  <button 
-                    onClick={() => configService.delete('mantenimiento_preventivo', m.id).then(onRefresh)}
-                    className="p-2 rounded-lg hover:bg-danger/20 hover:text-danger text-muted transition-all"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+            <Card key={m.id} className="maintenance-card group p-xl border-white/5 bg-black/40">
+              <div className="flex justify-between items-start mb-lg">
+                <div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-400"><Calendar size={24} /></div>
+                <Badge variant="success">ACTIVO</Badge>
+              </div>
+              <h4 className="text-xl font-black text-white mb-xs uppercase">{m.titulo}</h4>
+              <p className="text-xs text-muted mb-xl">{m.descripcion || 'Sin descripción.'}</p>
+              <div className="flex gap-3 mb-xl">
+                <Button variant="primary" className="flex-1 bg-emerald-600" onClick={() => startExecution(m)} icon={Activity}>INICIAR MANTENIMIENTO</Button>
+                <button onClick={() => configService.delete('mantenimiento_preventivo', m.id).then(onRefresh)} className="p-3 rounded-xl bg-white/5 hover:text-danger text-muted"><Trash2 size={16} /></button>
               </div>
             </Card>
           ))}
-          {maintenance.length === 0 && (
-            <div className="col-span-full py-20 flex flex-col items-center justify-center text-center glass-card border-dashed">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-md">
-                <Calendar size={32} className="text-muted" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-xs">No hay tareas programadas</h3>
-              <p className="text-muted text-sm max-w-xs">Configura tu plan de mantenimiento preventivo para evitar averías costosas.</p>
-              <Button variant="ghost" className="mt-lg" onClick={() => setIsAddingMaint(true)}>Crear primera tarea</Button>
-            </div>
-          )}
         </div>
-      ) : activeSubTab === 'categorias' ? (
+      ) : activeSubTab === 'plantillas' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {dbCategories.map(cat => (
-            <Card key={cat.id} className="template-card group hover-scale p-none relative overflow-hidden border-white/5 bg-black/40 backdrop-blur-sm">
-              <div className="p-xl">
-                <div className="flex justify-between items-center mb-lg">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
-                    <Layers size={20} />
-                  </div>
-                  <span className="text-[10px] font-black text-muted uppercase bg-white/5 px-3 py-1 rounded-full border border-white/10">
-                    {cat.subcategorias?.length || 0} HIJOS
-                  </span>
-                </div>
-                
-                <h4 className="text-lg font-black text-white mb-md group-hover:text-indigo-300 transition-colors uppercase tracking-tight">{cat.nombre}</h4>
-                
-                <div className="flex flex-wrap gap-xs mb-lg min-h-[60px]">
-                  {cat.subcategorias?.map((sub: string, i: number) => (
-                    <span key={i} className="text-[10px] font-bold text-white/40 py-1 px-3 bg-white/5 rounded-lg border border-white/5 whitespace-nowrap">
-                      {sub}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="flex justify-end pt-md border-t border-white/5 gap-sm">
-                  <button 
-                    onClick={() => handleDeleteCategory(cat.id)}
-                    className="p-2 rounded-lg hover:bg-danger/20 hover:text-danger text-muted transition-all"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+          {templates.map(t => (
+            <Card key={t.id} className="template-card p-xl border-white/5 bg-black/40">
+              <div className="flex justify-between items-center mb-lg">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center"><ClipboardList size={20} /></div>
+                <span className="text-[10px] font-black text-muted uppercase">{t.items?.length || 0} PUNTOS</span>
+              </div>
+              <h4 className="text-lg font-black text-white mb-md">{t.nombre}</h4>
+              <div className="flex justify-end pt-md border-t border-white/5">
+                <button onClick={() => configService.delete('mantenimiento_plantillas', t.id).then(onRefresh)} className="p-2 rounded-lg hover:text-danger text-muted transition-all"><Trash2 size={16} /></button>
               </div>
             </Card>
           ))}
-          {dbCategories.length === 0 && !loadingCats && (
-            <div className="col-span-full py-20 flex flex-col items-center justify-center text-center glass-card border-dashed">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-md">
-                <Layers size={32} className="text-muted" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-xs">No hay categorías</h3>
-              <p className="text-muted text-sm max-w-xs">Organiza tus tareas preventivas por categorías y subcategorías personalizadas.</p>
-              <Button variant="ghost" className="mt-lg" onClick={() => setIsManagingCats(true)}>Añadir primera categoría</Button>
-            </div>
-          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {templates.map(t => (
-            <Card key={t.id} className="template-card group hover-scale p-none relative overflow-hidden border-white/5 bg-black/40 backdrop-blur-sm">
-              <div className="p-xl">
-                <div className="flex justify-between items-center mb-lg">
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                    <ClipboardList size={20} />
-                  </div>
-                  <span className="text-[10px] font-black text-muted uppercase bg-white/5 px-3 py-1 rounded-full border border-white/10">
-                    {t.items?.length || 0} PUNTOS
-                  </span>
-                </div>
-                
-                <h4 className="text-lg font-black text-white mb-md group-hover:text-purple-300 transition-colors">{t.nombre}</h4>
-                
-                <div className="flex flex-wrap gap-xs mb-lg max-h-[100px] overflow-hidden">
-                  {t.items?.map((item: string, i: number) => (
-                    <span key={i} className="text-[10px] font-bold text-muted py-1 px-3 bg-white/5 rounded-lg border border-white/5 whitespace-nowrap">
-                      {item}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="flex justify-end pt-md border-t border-white/5">
-                  <button 
-                    onClick={() => configService.delete('mantenimiento_plantillas', t.id).then(onRefresh)}
-                    className="p-2 rounded-lg hover:bg-danger/20 hover:text-danger text-muted transition-all"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+          {dbCategories.map(cat => (
+            <Card key={cat.id} className="template-card p-xl border-white/5 bg-black/40">
+              <div className="flex justify-between items-center mb-lg">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center"><Layers size={20} /></div>
+                <span className="text-[10px] font-black text-muted uppercase">{cat.subcategorias?.length || 0} HIJOS</span>
+              </div>
+              <h4 className="text-lg font-black text-white mb-md">{cat.nombre}</h4>
+              <div className="flex justify-end pt-md border-t border-white/5">
+                <button onClick={() => handleDeleteCategory(cat.id)} className="p-2 rounded-lg hover:text-danger text-muted"><Trash2 size={16} /></button>
               </div>
             </Card>
           ))}
-          {templates.length === 0 && (
-            <div className="col-span-full py-20 flex flex-col items-center justify-center text-center glass-card border-dashed">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-md">
-                <ClipboardList size={32} className="text-muted" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-xs">No hay plantillas de revisión</h3>
-              <p className="text-muted text-sm max-w-xs">Crea listas de verificación para estandarizar los procesos de mantenimiento.</p>
-              <Button variant="ghost" className="mt-lg" onClick={() => setIsAddingTemplate(true)}>Crear primera plantilla</Button>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Modal: Nueva Tarea Rediseñado */}
-      <Modal
-        isOpen={isAddingMaint}
-        onClose={() => setIsAddingMaint(false)}
-        title="Nueva Programación"
-        maxWidth="750px"
-      >
-        <form onSubmit={handleAddMaint} className="maint-premium-form animate-slide-up">
-          <div className="form-layout-grid">
-            {/* Left Column: Info */}
-            <div className="form-column">
-              <div className="form-section-header">
-                <Calendar size={18} className="text-indigo-400" />
-                <span>Información General</span>
+      {/* Modals */}
+      <Modal isOpen={isAddingMaint} onClose={() => setIsAddingMaint(false)} title="Nueva Programación" maxWidth="750px">
+        <form onSubmit={handleAddMaint} className="maint-premium-form p-lg">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
+            <div className="flex flex-col gap-md">
+              <div className="flex flex-col gap-xs">
+                <label className="text-xs font-bold text-muted uppercase">Título</label>
+                <input type="text" required value={newMaint.titulo} onChange={e => setNewMaint({...newMaint, titulo: e.target.value})} className="premium-input" />
               </div>
-              
-              <div className="input-field-group">
-                <label>Título de la Tarea</label>
-                <input 
-                  type="text" 
-                  required 
-                  value={newMaint.titulo}
-                  onChange={e => setNewMaint({...newMaint, titulo: e.target.value})}
-                  placeholder="Ej: Revisión Climatización"
-                  className="premium-input"
-                />
-              </div>
-
-              <div className="input-field-group">
-                <label>Descripción / Observaciones</label>
-                <textarea 
-                  value={newMaint.descripcion}
-                  onChange={e => setNewMaint({...newMaint, descripcion: e.target.value})}
-                  placeholder="Instrucciones para el técnico..."
-                  rows={4}
-                  className="premium-textarea"
-                />
-              </div>
-
-              <div className="input-field-group">
-                <label>Próxima Fecha</label>
-                <input 
-                  type="date" 
-                  required
-                  value={newMaint.proxima_fecha}
-                  onChange={e => setNewMaint({...newMaint, proxima_fecha: e.target.value})}
-                  className="premium-input [color-scheme:dark]"
-                />
+              <div className="flex flex-col gap-xs">
+                <label className="text-xs font-bold text-muted uppercase">Descripción</label>
+                <textarea value={newMaint.descripcion} onChange={e => setNewMaint({...newMaint, descripcion: e.target.value})} className="premium-textarea" rows={3} />
               </div>
             </div>
-
-            {/* Right Column: Choices */}
-            <div className="form-column">
-              <div className="form-section-header">
-                <Activity size={18} className="text-purple-400" />
-                <span>Configuración Operativa</span>
+            <div className="flex flex-col gap-md">
+              <div className="flex flex-col gap-xs">
+                <label className="text-xs font-bold text-muted uppercase">Frecuencia</label>
+                <select value={newMaint.frecuencia} onChange={e => setNewMaint({...newMaint, frecuencia: e.target.value})} className="premium-select">
+                  <option value="diario">Diario</option>
+                  <option value="semanal">Semanal</option>
+                  <option value="mensual">Mensual</option>
+                  <option value="trimestral">Trimestral</option>
+                  <option value="semestral">Semestral</option>
+                  <option value="anual">Anual</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-xs">
+                <label className="text-xs font-bold text-muted uppercase">Categoría</label>
+                <select value={newMaint.categoria} onChange={e => setNewMaint({...newMaint, categoria: e.target.value})} className="premium-select">
+                  <option value="">Seleccione...</option>
+                   {dbCategories.map(cat => <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>)}
+                </select>
               </div>
 
-              <div className="frequency-selector">
-                <label className="input-label-premium">Frecuencia de Repetición</label>
-                <div className="freq-grid">
-                  {[
-                    { id: 'diario', label: 'Diario', icon: Clock },
-                    { id: 'semanal', label: 'Semanal', icon: Calendar },
-                    { id: 'mensual', label: 'Mensual', icon: Layers },
-                    { id: 'trimestral', label: 'Trimestral', icon: Repeat },
-                    { id: 'semestral', label: 'Cada 6 meses', icon: Activity },
-                    { id: 'anual', label: 'Anual', icon: CheckCircle }
-                  ].map(f => (
-                    <div 
-                      key={f.id}
-                      className={`freq-card ${newMaint.frecuencia === f.id ? 'active' : ''}`}
-                      onClick={() => setNewMaint({...newMaint, frecuencia: f.id})}
-                    >
-                      <f.icon size={20} />
-                      <span>{f.label}</span>
-                    </div>
+              <div className="flex flex-col gap-xs mt-md">
+                <label className="text-xs font-bold text-muted uppercase">Checklist Personalizado</label>
+                <div className="flex gap-2 mb-2">
+                  <input 
+                    type="text" 
+                    placeholder="Añadir punto al checklist..." 
+                    value={newCheckItem} 
+                    onChange={e => setNewCheckItem(e.target.value)} 
+                    className="premium-input flex-1"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newCheckItem.trim()) {
+                          setNewMaint(prev => ({ ...prev, checklist_items: [...prev.checklist_items, newCheckItem.trim()] }));
+                          setNewCheckItem('');
+                        }
+                      }
+                    }}
+                  />
+                  <Button 
+                    type="button" 
+                    onClick={() => {
+                      if (newCheckItem.trim()) {
+                        setNewMaint(prev => ({ ...prev, checklist_items: [...prev.checklist_items, newCheckItem.trim()] }));
+                        setNewCheckItem('');
+                      }
+                    }} 
+                    icon={Plus} 
+                    variant="ghost"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
+                  {newMaint.checklist_items.map((item, i) => (
+                    <Badge key={i} className="flex gap-1 items-center bg-indigo-500/20 text-indigo-300 border-indigo-500/30">
+                      {item}
+                      <X size={12} className="cursor-pointer hover:text-white" onClick={() => setNewMaint({ ...newMaint, checklist_items: newMaint.checklist_items.filter((_, idx) => idx !== i) })} />
+                    </Badge>
                   ))}
+                  {newMaint.checklist_items.length === 0 && (
+                    <span className="text-[10px] text-muted italic">Se usarán los puntos por defecto de la categoría si no añades personalizados.</span>
+                  )}
                 </div>
               </div>
-
-              <div className="input-field-group mt-xl">
-                <label>Categoría Principal</label>
-                <div className="premium-select-wrap">
-                  <select 
-                    value={newMaint.categoria}
-                    onChange={e => setNewMaint({...newMaint, categoria: e.target.value, subcategoria: ''})}
-                    className="premium-select"
-                  >
-                    <option value="">Seleccione Categoría</option>
-                    {dbCategories.map(cat => (
-                      <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {newMaint.categoria && (
-                <div className="input-field-group mt-lg animate-fade-in">
-                  <label>Subcategoría / Filtro</label>
-                  <div className="premium-select-wrap">
-                    <select 
-                      value={newMaint.subcategoria}
-                      onChange={e => setNewMaint({...newMaint, subcategoria: e.target.value})}
-                      className="premium-select"
-                    >
-                      <option value="">Seleccione Subcategoría</option>
-                      {dbCategories.find(c => c.nombre === newMaint.categoria)?.subcategorias?.map((sub: string) => (
-                        <option key={sub} value={sub}>{sub}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
-
-          <div className="premium-modal-footer">
-            <button type="button" onClick={() => setIsAddingMaint(false)} className="btn-premium-secondary">
-              Cancelar
-            </button>
-            <button type="submit" className="btn-premium-primary">
-              <Plus size={18} />
-              Confirmar Programación
-            </button>
+          <div className="flex justify-end gap-md mt-xl">
+            <Button variant="ghost" onClick={() => setIsAddingMaint(false)}>Cancelar</Button>
+            <Button variant="primary" type="submit">Crear Tarea</Button>
           </div>
         </form>
       </Modal>
 
-      {/* Modal: Nueva Plantilla Rediseñado */}
-      <Modal
-        isOpen={isAddingTemplate}
-        onClose={() => setIsAddingTemplate(false)}
-        title="Configurar Checklist"
-        maxWidth="600px"
-      >
-        <form onSubmit={handleAddTemplate} className="maint-premium-form animate-slide-up">
-          <div className="input-field-group">
-            <label>Nombre de la Plantilla</label>
-            <input 
-              type="text" 
-              required 
-              value={newTemplate.nombre}
-              onChange={e => setNewTemplate({...newTemplate, nombre: e.target.value})}
-              placeholder="Ej: Checklist Habitaciones"
-              className="premium-input"
-            />
+      <Modal isOpen={isAddingTemplate} onClose={() => setIsAddingTemplate(false)} title="Nueva Plantilla" maxWidth="500px">
+        <form onSubmit={handleAddTemplate} className="p-lg flex flex-col gap-lg">
+          <input type="text" placeholder="Nombre de plantilla" required value={newTemplate.nombre} onChange={e => setNewTemplate({...newTemplate, nombre: e.target.value})} className="premium-input" />
+          <div className="flex gap-2">
+            <input type="text" placeholder="Añadir punto..." value={newTemplateItem} onChange={e => setNewTemplateItem(e.target.value)} className="premium-input flex-1" />
+            <Button type="button" onClick={handleAddTemplateItem} icon={Plus} />
           </div>
-
-          <div className="template-items-section mt-lg">
-            <label className="input-label-premium">Elementos de Inspección</label>
-            <div className="dynamic-items-list glass">
-              {newTemplate.items.map((item, idx) => (
-                <div key={idx} className="template-item-row animate-fade-in">
-                  <CheckCircle size={14} className="text-emerald-400" />
-                  <span className="flex-1">{item}</span>
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      const updated = [...newTemplate.items];
-                      updated.splice(idx, 1);
-                      setNewTemplate({...newTemplate, items: updated});
-                    }}
-                    className="text-white/20 hover:text-red-400 transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-              
-              <div className="add-item-control mt-md">
-                <input 
-                  type="text"
-                  value={newTemplateItem}
-                  onChange={e => setNewTemplateItem(e.target.value)}
-                  onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddTemplateItem())}
-                  placeholder="Añadir nuevo punto..."
-                  className="item-input"
-                />
-                <button type="button" onClick={handleAddTemplateItem} className="item-add-btn">
-                  <Plus size={16} />
-                </button>
-              </div>
-            </div>
+          <div className="flex flex-wrap gap-2">
+            {newTemplate.items.map((item, i) => <Badge key={i} className="flex gap-1 items-center">{item}<X size={12} className="cursor-pointer" onClick={() => setNewTemplate({...newTemplate, items: newTemplate.items.filter((_, idx) => idx !== i)})} /></Badge>)}
           </div>
-
-          <div className="premium-modal-footer mt-xl">
-            <button type="button" onClick={() => setIsAddingTemplate(false)} className="btn-premium-secondary">
-              Descartar
-            </button>
-            <button type="submit" className="btn-premium-primary">
-              Guardar Plantilla
-            </button>
-          </div>
+          <Button variant="primary" type="submit">Guardar</Button>
         </form>
       </Modal>
 
-      {/* Modal: Gestionar Categoría y Subcategorías */}
-      <Modal
-        isOpen={isManagingCats}
-        onClose={() => setIsManagingCats(false)}
-        title="Crear Nueva Categoría"
-        maxWidth="600px"
-      >
-        <form onSubmit={handleCreateCategory} className="maint-premium-form animate-slide-up">
-          <div className="input-field-group">
-            <label>Nombre de la Categoría</label>
-            <input 
-              type="text" 
-              required 
-              value={newCat.nombre}
-              onChange={e => setNewCat({...newCat, nombre: e.target.value})}
-              placeholder="Ej: Climatización"
-              className="premium-input"
-            />
+      <Modal isOpen={isManagingCats} onClose={() => setIsManagingCats(false)} title="Nueva Categoría" maxWidth="500px">
+        <form onSubmit={handleCreateCategory} className="p-lg flex flex-col gap-lg">
+          <input type="text" placeholder="Nombre de categoría" required value={newCat.nombre} onChange={e => setNewCat({...newCat, nombre: e.target.value})} className="premium-input" />
+          <div className="flex gap-2">
+            <input type="text" placeholder="Subcategoría..." value={newSubItem} onChange={e => setNewSubItem(e.target.value)} className="premium-input flex-1" />
+            <Button type="button" onClick={() => { if(newSubItem.trim()) { setNewCat({...newCat, subcategorias: [...newCat.subcategorias, newSubItem.trim()]}); setNewSubItem(''); }}} icon={Plus} />
           </div>
-
-          <div className="template-items-section mt-lg">
-            <label className="input-label-premium">Subcategorías / Elementos (Opcional)</label>
-            <div className="dynamic-items-list glass">
-              {newCat.subcategorias.map((sub, idx) => (
-                <div key={idx} className="template-item-row animate-fade-in">
-                  <Layers size={14} className="text-indigo-400" />
-                  <span className="flex-1 text-white/70">{sub}</span>
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      const updated = [...newCat.subcategorias];
-                      updated.splice(idx, 1);
-                      setNewCat({...newCat, subcategorias: updated});
-                    }}
-                    className="text-white/20 hover:text-red-400 transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-              
-              <div className="add-item-control mt-md">
-                <input 
-                  type="text"
-                  value={newSubItem}
-                  onChange={e => setNewSubItem(e.target.value)}
-                  onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), (newSubItem.trim() && (setNewCat({...newCat, subcategorias: [...newCat.subcategorias, newSubItem.trim()]}), setNewSubItem(''))))}
-                  placeholder="Añadir subcategoría (Entrar)..."
-                  className="item-input"
-                />
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    if (newSubItem.trim()) {
-                      setNewCat({...newCat, subcategorias: [...newCat.subcategorias, newSubItem.trim()]});
-                      setNewSubItem('');
-                    }
-                  }} 
-                  className="item-add-btn"
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-            </div>
+          <div className="flex flex-wrap gap-2">
+            {newCat.subcategorias.map((sub, i) => <Badge key={i} className="flex gap-1 items-center">{sub}<X size={12} className="cursor-pointer" onClick={() => setNewCat({...newCat, subcategorias: newCat.subcategorias.filter((_, idx) => idx !== i)})} /></Badge>)}
           </div>
-
-          <div className="premium-modal-footer mt-xl">
-            <button type="button" onClick={() => setIsManagingCats(false)} className="btn-premium-secondary">
-              Cancelar
-            </button>
-            <button type="submit" className="btn-premium-primary">
-              <Plus size={18} />
-              Crear Categoría
-            </button>
-          </div>
+          <Button variant="primary" type="submit">Crear</Button>
         </form>
+      </Modal>
+
+      <Modal isOpen={!!selectedRoom} onClose={() => setSelectedRoom(null)} title={`Habitación ${selectedRoom?.nombre}`} maxWidth="500px">
+        <div className="p-lg flex flex-col gap-lg">
+          <div className="flex flex-col gap-md">
+            {inspectionChecklist.map((item, idx) => (
+              <button key={idx} onClick={() => handleToggleItem(idx)} className={`p-md rounded-2xl border flex justify-between items-center transition-all ${item.status === 'ok' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-orange-500/10 border-orange-500/30'}`}>
+                <span className="font-bold text-white uppercase text-xs">{item.name}</span>
+                {item.status === 'ok' ? <ShieldCheck className="text-emerald-400" /> : <AlertTriangle className="text-orange-400" />}
+              </button>
+            ))}
+          </div>
+          <Button variant="primary" onClick={handleSaveInspection}>Guardar Revisión</Button>
+        </div>
       </Modal>
 
       <style>{`
-        /* Keyframes para animaciones premium */
-        @keyframes slideUp {
-          from { transform: translateY(20px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
-
-        /* Estilos de Formulario Premium */
-        .maint-premium-form { display: flex; flex-direction: column; gap: 1.5rem; }
-        .form-layout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
-        @media (max-width: 768px) { .form-layout-grid { grid-template-columns: 1fr; gap: 1rem; } }
-
-        .form-section-header { 
-          display: flex; align-items: center; gap: 0.75rem; 
-          margin-bottom: 1.25rem; font-size: 0.85rem; font-weight: 800; 
-          text-transform: uppercase; letter-spacing: 0.05em; color: white/80;
-        }
-
-        .input-field-group { display: flex; flex-direction: column; gap: 0.5rem; }
-        .input-field-group label { font-size: 0.75rem; font-weight: 700; color: #94a3b8; padding-left: 2px; }
-
-        /* Inputs Glassmorphism */
         .premium-input, .premium-textarea, .premium-select {
           background: rgba(255, 255, 255, 0.03);
           border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 14px;
-          padding: 0.85rem 1rem;
-          color: white;
-          font-family: inherit;
-          transition: all 0.3s ease;
-          width: 100%;
+          border-radius: 12px; padding: 0.75rem 1rem; color: white; width: 100%; transition: all 0.2s;
         }
         .premium-input:focus, .premium-textarea:focus, .premium-select:focus {
-          outline: none; background: rgba(255, 255, 255, 0.06);
-          border-color: #6366f1; box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+          outline: none; border-color: #6366f1; background: rgba(255, 255, 255, 0.05);
         }
-
-        /* Frequency Selector (Cards Style like Rooms) */
-        .freq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-        .freq-card {
-          padding: 1rem; border-radius: 16px; background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column;
-          align-items: center; gap: 0.5rem; cursor: pointer; transition: all 0.3s ease;
-          color: #94a3b8;
-        }
-        .freq-card:hover { background: rgba(255,255,255,0.06); transform: translateY(-2px); }
-        .freq-card.active { 
-          background: rgba(99, 102, 241, 0.2); border-color: #6366f1; 
-          color: white; box-shadow: 0 8px 25px rgba(99, 102, 241, 0.3);
-          transform: scale(1.02);
-        }
-        
-        /* Fix para evitar fondo blanco en selección */
-        .premium-select option {
-          background: #11111a;
-          color: white;
-        }
-        
-        /* Ocultar scrollbars */
-        .premium-textarea::-webkit-scrollbar { width: 4px; }
-        .premium-textarea::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        .freq-card span { font-size: 0.75rem; font-weight: 700; }
-
-        /* Dynamic Item List */
-        .dynamic-items-list { 
-          border-radius: 16px; padding: 0.5rem; display: flex; flex-direction: column; gap: 4px;
-          background: rgba(15, 15, 26, 0.4); border: 1px solid rgba(255,255,255,0.05);
-        }
-        .template-item-row { 
-          display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem;
-          background: rgba(255, 255, 255, 0.02); border-radius: 10px; font-size: 0.85rem;
-        }
-        .add-item-control { display: flex; gap: 0.5rem; padding: 4px; }
-        .item-input { 
-          flex: 1; background: transparent; border: none; font-size: 0.85rem; color: white; outline: none;
-          padding: 0.5rem;
-        }
-        .item-add-btn { 
-          width: 34px; height: 34px; border-radius: 10px; background: #6366f1; color: white;
-          display: flex; align-items: center; justify-content: center; transition: all 0.2s;
-        }
-        .item-add-btn:hover { transform: scale(1.05); filter: brightness(1.1); }
-
-        /* Footer Buttons */
-        .premium-modal-footer { 
-          display: flex; justify-content: flex-end; gap: 1rem; padding-top: 1.5rem;
-          border-top: 1px solid rgba(255,255,255,0.05);
-        }
-        .btn-premium-primary {
-          background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-          color: white; padding: 0.85rem 1.75rem; border-radius: 14px;
-          font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem;
-          box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3); transition: all 0.3s ease;
-        }
-        .btn-premium-primary:hover { transform: translateY(-2px); filter: brightness(1.1); }
-        .btn-premium-secondary {
-          background: rgba(255,255,255,0.05); color: #94a3b8; padding: 0.85rem 1.5rem;
-          border-radius: 14px; font-weight: 600; font-size: 0.9rem; transition: all 0.2s;
-        }
-        .btn-premium-secondary:hover { background: rgba(255,255,255,0.08); color: white; }
+        .premium-select option { background: #111; color: white; }
       `}</style>
     </div>
   );
