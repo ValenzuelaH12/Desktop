@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, RefreshCw, Trash2, X } from 'lucide-react';
+import { 
+  Users, 
+  UserPlus, 
+  RefreshCw, 
+  Trash2, 
+  X, 
+  Mail, 
+  Lock, 
+  User, 
+  Shield, 
+  ChevronRight,
+  Info,
+  CheckCircle2
+} from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { configService } from '../../../services/configService';
 import { Profile, UserRole } from '../../../types';
@@ -204,65 +217,111 @@ export const UserManager: React.FC<UserManagerProps> = ({
           <Button onClick={handleAddUser}>Registrar</Button>
         }
       >
-        <div className="grid grid-cols-2 gap-sm mb-sm">
-          <div className="input-group">
-            <label className="text-[10px] font-black text-muted uppercase tracking-widest mb-1.5 block">Nombre Completo</label>
-            <input 
-              type="text" 
-              className="v-input-premium" 
-              placeholder="Ej. Juan Pérez"
-              value={newUser.nombre} 
-              onChange={e => setNewUser({...newUser, nombre: e.target.value})} 
-              required 
-            />
+        <div className="space-y-6">
+          {/* SECCIÓN 1: IDENTIDAD */}
+          <div className="premium-section-header">
+            <div className="section-icon-box">
+              <User size={14} />
+            </div>
+            <h4 className="section-title">Información de Identidad</h4>
           </div>
-          <div className="input-group">
-            <label className="text-[10px] font-black text-muted uppercase tracking-widest mb-1.5 block">Email Institucional</label>
-            <input 
-              type="email" 
-              className="v-input-premium" 
-              placeholder="juan@hotel.com"
-              value={newUser.email} 
-              onChange={e => setNewUser({...newUser, email: e.target.value})} 
-              required 
-            />
-          </div>
-        </div>
 
-        <div className="grid grid-cols-2 gap-sm items-end mb-sm">
-          <div className="input-group">
-            <label className="text-[10px] font-black text-muted uppercase tracking-widest mb-1.5 block">Contraseña de Acceso</label>
-            <input 
-              type="password" 
-              className="v-input-premium" 
-              placeholder="Min. 6 caracteres"
-              value={newUser.password} 
-              onChange={e => setNewUser({...newUser, password: e.target.value})} 
-              required 
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="group relative">
+              <label className="input-label-premium">Nombre Completo</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted/50 group-focus-within:text-accent transition-colors">
+                  <User size={16} />
+                </div>
+                <input 
+                  type="text" 
+                  className="v-input-ultra" 
+                  placeholder="Ej. Juan Pérez"
+                  value={newUser.nombre} 
+                  onChange={e => setNewUser({...newUser, nombre: e.target.value})} 
+                  required 
+                />
+              </div>
+            </div>
+            <div className="group relative">
+              <label className="input-label-premium">Correo Electrónico</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted/50 group-focus-within:text-accent transition-colors">
+                  <Mail size={16} />
+                </div>
+                <input 
+                  type="email" 
+                  className="v-input-ultra" 
+                  placeholder="juan@hotel.com"
+                  value={newUser.email} 
+                  onChange={e => setNewUser({...newUser, email: e.target.value})} 
+                  required 
+                />
+              </div>
+            </div>
           </div>
-          <div className="input-group">
-            <label className="text-[10px] font-black text-muted uppercase tracking-widest mb-1.5 block">Rol en el Equipo</label>
-            <select 
-              className="v-input-premium" 
-              value={newUser.rol} 
-              onChange={e => setNewUser({...newUser, rol: e.target.value as UserRole})}
-            >
-              <option value="recepcion">Recepción</option>
-              <option value="mantenimiento">Mantenimiento</option>
-              <option value="limpieza">Limpieza</option>
-              <option value="gobernanta">Gobernanta</option>
-              <option value="admin">Administrador</option>
-            </select>
-          </div>
-        </div>
 
-        <div className="input-group mb-sm">
-          <div className="flex justify-between items-center mb-xs">
-            <label className="input-label text-[10px]">Permisos de Acceso</label>
-            <span className="text-[9px] text-muted">Haz clic para activar/desactivar</span>
+          {/* SECCIÓN 2: SEGURIDAD Y ROL */}
+          <div className="premium-section-header">
+            <div className="section-icon-box">
+              <Lock size={14} />
+            </div>
+            <h4 className="section-title">Seguridad y Jerarquía</h4>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="group relative">
+              <label className="input-label-premium">Contraseña Maestra</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted/50 group-focus-within:text-accent transition-colors">
+                  <Lock size={16} />
+                </div>
+                <input 
+                  type="password" 
+                  className="v-input-ultra" 
+                  placeholder="********"
+                  value={newUser.password} 
+                  onChange={e => setNewUser({...newUser, password: e.target.value})} 
+                  required 
+                />
+              </div>
+            </div>
+            <div className="group relative">
+              <label className="input-label-premium">Rol Administrativo</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted/50 group-focus-within:text-accent transition-colors">
+                  <Shield size={16} />
+                </div>
+                <select 
+                  className="v-input-ultra appearance-none" 
+                  value={newUser.rol} 
+                  onChange={e => setNewUser({...newUser, rol: e.target.value as UserRole})}
+                >
+                  <option value="recepcion">Recepción / V-Nexus</option>
+                  <option value="mantenimiento">Técnico Mantenimiento</option>
+                  <option value="limpieza">Staff de Limpieza</option>
+                  <option value="gobernanta">Supervisión / Gobernanta</option>
+                  <option value="admin">Administrador Suite</option>
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted">
+                  <ChevronRight size={14} className="rotate-90" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SECCIÓN 3: CAPACIDADES */}
+          <div className="premium-section-header">
+            <div className="section-icon-box">
+              <Shield size={14} />
+            </div>
+            <h4 className="section-title">Privilegios de Módulo</h4>
+            <div className="ml-auto flex items-center gap-1 text-[9px] text-accent/80 font-black uppercase bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
+              <Info size={10} /> 
+              Selección Inteligente
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {AVAILABLE_MODULES.map(module => {
               const Icon = module.icon;
               const isActive = newUser.permisos?.includes(module.id);
@@ -270,10 +329,10 @@ export const UserManager: React.FC<UserManagerProps> = ({
                 <button 
                   key={module.id} 
                   type="button"
-                  className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border transition-all duration-300 ${
+                  className={`group relative flex flex-col items-center justify-center gap-2 p-5 rounded-[22px] border transition-all duration-500 overflow-hidden ${
                     isActive 
-                      ? 'bg-accent text-white border-accent shadow-lg shadow-accent/25 scale-[1.02]' 
-                      : 'bg-white/5 border-white/5 text-muted hover:border-white/20 hover:bg-white/10 hover:text-white'
+                      ? 'bg-accent text-white border-accent shadow-[0_8px_20px_rgba(99,102,241,0.3)] scale-[1.02]' 
+                      : 'bg-white/5 border-white/5 text-muted/60 hover:border-white/20 hover:bg-white/10 hover:text-white'
                   }`}
                   onClick={() => {
                     const perms = isActive 
@@ -282,10 +341,17 @@ export const UserManager: React.FC<UserManagerProps> = ({
                     setNewUser({...newUser, permisos: perms});
                   }}
                 >
-                  <div className={`p-2 rounded-xl transition-colors ${isActive ? 'bg-white/20' : 'bg-black/20'}`}>
-                    <Icon size={18} />
+                  {/* Glow background when active */}
+                  {isActive && <div className="absolute inset-0 bg-gradient-to-tr from-accent/40 via-transparent to-transparent opacity-50 animate-pulse" />}
+                  
+                  <div className={`relative p-3 rounded-2xl transition-all duration-500 ${isActive ? 'bg-white/20 shadow-inner' : 'bg-black/20 group-hover:scale-110'}`}>
+                    <Icon size={22} strokeWidth={2.5} />
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-tighter">{module.name}</span>
+                  <span className="relative text-[10px] font-black uppercase tracking-widest">{module.name}</span>
+                  
+                  {isActive && <div className="absolute top-2 right-2 text-white">
+                    <CheckCircle2 size={12} fill="white" className="text-accent" />
+                  </div>}
                 </button>
               );
             })}
@@ -304,80 +370,159 @@ export const UserManager: React.FC<UserManagerProps> = ({
         }
       >
         {editingUser && (
-          <div className="space-y-sm">
-            <div className="grid grid-cols-2 gap-sm">
-              <div className="input-group">
-                <label className="input-label text-[10px] mb-xs">Nombre</label>
-                <input 
-                  type="text" 
-                  className="input py-1.5 text-xs" 
-                  value={editingUser.nombre} 
-                  onChange={e => setEditingUser({...editingUser, nombre: e.target.value})} 
-                  required 
-                />
+          <div className="space-y-6">
+            {/* SECCIÓN 1: IDENTIDAD */}
+            <div className="premium-section-header">
+              <div className="section-icon-box">
+                <User size={14} />
               </div>
-              <div className="input-group">
-                <label className="input-label text-[10px] mb-xs">Rol</label>
-                <select 
-                  className="select py-1.5 text-xs" 
-                  value={editingUser.rol} 
-                  onChange={e => setEditingUser({...editingUser, rol: e.target.value as UserRole})}
-                >
-                  <option value="recepcion">Recepción</option>
-                  <option value="mantenimiento">Mantenimiento</option>
-                  <option value="limpieza">Limpieza</option>
-                  <option value="gobernanta">Gobernanta</option>
-                  <option value="admin">Administrador</option>
-                </select>
+              <h4 className="section-title">Información de Perfil</h4>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="group relative">
+                <label className="input-label-premium">Nombre Completo</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted/50 group-focus-within:text-accent transition-colors">
+                    <User size={16} />
+                  </div>
+                  <input 
+                    type="text" 
+                    className="v-input-ultra" 
+                    value={editingUser.nombre} 
+                    onChange={e => setEditingUser({...editingUser, nombre: e.target.value})} 
+                    required 
+                  />
+                </div>
+              </div>
+              <div className="group relative">
+                <label className="input-label-premium">Rol de Usuario</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted/50 group-focus-within:text-accent transition-colors">
+                    <Shield size={16} />
+                  </div>
+                  <select 
+                    className="v-input-ultra appearance-none" 
+                    value={editingUser.rol} 
+                    onChange={e => setEditingUser({...editingUser, rol: e.target.value as UserRole})}
+                  >
+                    <option value="recepcion">Recepción / V-Nexus</option>
+                    <option value="mantenimiento">Técnico Mantenimiento</option>
+                    <option value="limpieza">Staff de Limpieza</option>
+                    <option value="gobernanta">Supervisión / Gobernanta</option>
+                    <option value="admin">Administrador Suite</option>
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted">
+                    <ChevronRight size={14} className="rotate-90" />
+                  </div>
+                </div>
               </div>
             </div>
-            
-            <div className="input-group">
-              <label className="input-label text-[10px] mb-xs">Permisos de Acceso</label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-                {AVAILABLE_MODULES.map(module => {
-                  const Icon = module.icon;
-                  const isActive = editingUser.permisos?.includes(module.id);
-                  return (
-                    <button 
-                      key={module.id} 
-                      type="button"
-                      className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border transition-all duration-300 ${
-                        isActive 
-                          ? 'bg-accent text-white border-accent shadow-lg shadow-accent/25 scale-[1.02]' 
-                          : 'bg-white/5 border-white/5 text-muted hover:border-white/20 hover:bg-white/10 hover:text-white'
-                      }`}
-                      onClick={() => {
-                        const perms = isActive 
-                          ? (editingUser.permisos || []).filter(p => p !== module.id)
-                          : [...(editingUser.permisos || []), module.id];
-                        setEditingUser({...editingUser, permisos: perms});
-                      }}
-                    >
-                      <div className={`p-2 rounded-xl transition-colors ${isActive ? 'bg-white/20' : 'bg-black/20'}`}>
-                        <Icon size={18} />
-                      </div>
-                      <span className="text-[10px] font-black uppercase tracking-tighter">{module.name}</span>
-                    </button>
-                  );
-                })}
+
+            {/* SECCIÓN 2: PRIVILEGIOS */}
+            <div className="premium-section-header">
+              <div className="section-icon-box">
+                <Lock size={14} />
               </div>
+              <h4 className="section-title">Ajustes de Permisos</h4>
+              <div className="ml-auto flex items-center gap-1 text-[9px] text-accent/80 font-black uppercase bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
+                <Info size={10} /> 
+                Configuración Activa
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {AVAILABLE_MODULES.map(module => {
+                const Icon = module.icon;
+                const isActive = editingUser.permisos?.includes(module.id);
+                return (
+                  <button 
+                    key={module.id} 
+                    type="button"
+                    className={`group relative flex flex-col items-center justify-center gap-2 p-5 rounded-[22px] border transition-all duration-500 overflow-hidden ${
+                      isActive 
+                        ? 'bg-accent text-white border-accent shadow-[0_8px_20px_rgba(99,102,241,0.3)] scale-[1.02]' 
+                        : 'bg-white/5 border-white/5 text-muted/60 hover:border-white/20 hover:bg-white/10 hover:text-white'
+                    }`}
+                    onClick={() => {
+                      const perms = isActive 
+                        ? (editingUser.permisos || []).filter(p => p !== module.id)
+                        : [...(editingUser.permisos || []), module.id];
+                      setEditingUser({...editingUser, permisos: perms});
+                    }}
+                  >
+                    {isActive && <div className="absolute inset-0 bg-gradient-to-tr from-accent/40 via-transparent to-transparent opacity-50 animate-pulse" />}
+                    
+                    <div className={`relative p-3 rounded-2xl transition-all duration-500 ${isActive ? 'bg-white/20 shadow-inner' : 'bg-black/20 group-hover:scale-110'}`}>
+                      <Icon size={22} strokeWidth={2.5} />
+                    </div>
+                    <span className="relative text-[10px] font-black uppercase tracking-widest">{module.name}</span>
+                    
+                    {isActive && <div className="absolute top-2 right-2 text-white">
+                      <CheckCircle2 size={12} fill="white" className="text-accent" />
+                    </div>}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
       </Modal>
       <style>{`
-        .v-input-premium {
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 12px; padding: 0.85rem 1rem; color: white; width: 100%; transition: all 0.2s;
-          font-size: 0.85rem;
+        .v-input-ultra {
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 16px; 
+          padding: 0.9rem 1rem 0.9rem 2.75rem; 
+          color: white; 
+          width: 100%; 
+          transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          font-size: 0.9rem;
+          font-weight: 500;
+          box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
         }
-        .v-input-premium:focus {
-          outline: none; border-color: #6366f1; background: rgba(255, 255, 255, 0.06);
-          box-shadow: 0 0 15px rgba(99, 102, 241, 0.1);
+        .v-input-ultra:focus {
+          outline: none; 
+          border-color: #6366f1; 
+          background: rgba(99, 102, 241, 0.05);
+          box-shadow: 0 0 20px rgba(99, 102, 241, 0.15), inset 0 2px 4px rgba(0,0,0,0.05);
+          transform: translateY(-1px);
         }
-        .v-input-premium option { background: #111; color: white; }
+        .v-input-ultra::placeholder { color: rgba(255,255,255,0.2); font-weight: 400; }
+        .v-input-ultra option { background: #0a0a0f; color: white; padding: 10px; }
+
+        .input-label-premium {
+          display: block;
+          font-size: 9px;
+          font-weight: 900;
+          color: rgba(255,255,255,0.4);
+          text-transform: uppercase;
+          letter-spacing: 0.15em;
+          margin-bottom: 8px;
+          padding-left: 4px;
+        }
+
+        .premium-section-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 8px;
+        }
+        .section-icon-box {
+          width: 28px; height: 28px;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 8px;
+          display: flex; align-items: center; justify-content: center;
+          color: #6366f1;
+        }
+        .section-title {
+          font-size: 11px;
+          font-weight: 800;
+          color: #fff;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
       `}</style>
     </div>
   );
