@@ -13,6 +13,7 @@ import { MaintenanceManager } from '../components/features/config/MaintenanceMan
 import { NexusConfig } from '../components/features/config/NexusConfig';
 import { SettingsManager } from '../components/features/config/SettingsManager';
 import { HotelManager } from '../components/features/config/HotelManager';
+import { IncidentTypeManager } from '../components/features/config/IncidentTypeManager';
 import { configService as configApi } from '../services/configService';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -21,6 +22,7 @@ const TABS = [
   { id: 'usuarios', name: 'Usuarios', icon: Users },
   { id: 'zonas', name: 'Zonas y Habs', icon: Layers },
   { id: 'activos', name: 'Activos / QR', icon: Package },
+  { id: 'incidencias', name: 'Tipos Incidencias', icon: Activity },
   { id: 'contadores', name: 'Contadores', icon: Activity },
   { id: 'mantenimiento', name: 'Mantenimiento', icon: Calendar },
   { id: 'v-nexus', name: 'V-Nexus', icon: Smartphone },
@@ -48,18 +50,20 @@ export default function Configuracion() {
     activos: [],
     contadores: [],
     mantenimiento: [],
-    plantillas: []
+    plantillas: [],
+    tipos: []
   });
 
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [users, zonas, habitaciones, activos, contadores, mantenimiento, plantillas] = await Promise.all([
+      const [users, zonas, habitaciones, activos, contadores, tipos, mantenimiento, plantillas] = await Promise.all([
         configApi.getUsers(activeHotelId),
         configApi.getZones(activeHotelId),
         configApi.getRooms(activeHotelId),
         configApi.getAssets(activeHotelId),
         configApi.getCounters(activeHotelId),
+        configApi.getIncidentTypes(activeHotelId),
         supabase.from('mantenimiento_preventivo').select('*').eq('hotel_id', activeHotelId).order('frecuencia'),
         supabase.from('mantenimiento_plantillas').select('*').eq('hotel_id', activeHotelId).order('nombre')
       ]);
@@ -70,6 +74,7 @@ export default function Configuracion() {
         habitaciones,
         activos,
         contadores,
+        tipos,
         mantenimiento: mantenimiento.data || [],
         plantillas: plantillas.data || []
       });
@@ -182,6 +187,15 @@ export default function Configuracion() {
               activeHotelId={activeHotelId}
               onMessage={showMsg} 
               onRefresh={fetchAll}
+            />
+          )}
+
+          {activeTab === 'incidencias' && (
+            <IncidentTypeManager 
+              types={data.tipos} 
+              onMessage={showMsg} 
+              onRefresh={fetchAll} 
+              activeHotelId={activeHotelId}
             />
           )}
 

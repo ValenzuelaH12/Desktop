@@ -119,3 +119,11 @@ export interface GlobalSettings {
   welcome_message: string;
   notification_rules?: Record<string, NotificationRule>;
 }
+
+export interface IncidentType {
+  id: string;
+  nombre: string;
+  categoria: string;
+  hotel_id?: string | null;
+  created_at?: string;
+}

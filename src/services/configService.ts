@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { Zone, Room, Asset, Counter, Profile } from '../types';
+import { Zone, Room, Asset, Counter, Profile, IncidentType } from '../types';
 
 export const configService = {
   // Profiles
@@ -41,6 +41,22 @@ export const configService = {
   async getCounters(hotelId?: string | null): Promise<Counter[]> {
     let query = supabase.from('contadores').select('*').neq('id', '00000000-0000-0000-0000-000000000000').order('nombre');
     if (hotelId) query = query.eq('hotel_id', hotelId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Incident Types
+  async getIncidentTypes(hotelId?: string | null): Promise<IncidentType[]> {
+    let query = supabase.from('tipos_problemas').select('*').order('nombre');
+    
+    // Filtro: Globales (null) O del hotel específico
+    if (hotelId) {
+      query = query.or(`hotel_id.is.null,hotel_id.eq.${hotelId}`);
+    } else {
+      query = query.is('hotel_id', null);
+    }
+
     const { data, error } = await query;
     if (error) throw error;
     return data || [];
