@@ -1162,17 +1162,31 @@ export default function Planificacion() {
 
       {/* MODAL COMPLETAR TAREA */}
       {completingTask && (
-        <div className="modal-overlay" onClick={() => setCompletingTask(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Registrar Ejecución</h2>
-              <button className="btn-icon btn-ghost" onClick={() => setCompletingTask(null)}><X size={20} /></button>
+        <div className="modal-overlay backdrop-blur-sm" onClick={() => setCompletingTask(null)}>
+          <div className="modal-content max-w-2xl bg-[#0a0a0f]/90 border border-white/10 shadow-2xl rounded-[2.5rem] overflow-hidden animate-in fade-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+            <div className="modal-header border-b border-white/5 py-lg px-xl bg-gradient-to-r from-accent/10 to-transparent">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-accent font-black tracking-[0.2em] uppercase mb-1">REGISTRO DE OPERACIÓN</span>
+                <h2 className="text-2xl font-black text-white tracking-tight">Ejecutar Mantenimiento</h2>
+              </div>
+              <button className="p-2.5 rounded-2xl bg-white/5 text-muted hover:text-white hover:bg-white/10 transition-all" onClick={() => setCompletingTask(null)}><X size={20} /></button>
             </div>
             <form onSubmit={handleCompleteTask}>
-              <div className="modal-body">
-                <div className="bg-accent-5 p-md rounded-md mb-md">
-                  <h3 className="font-bold text-accent mb-xs">{completingTask.titulo}</h3>
-                  <p className="text-sm opacity-80">{completingTask.descripcion || 'Sin descripción adicional.'}</p>
+              <div className="modal-body p-xl">
+                <div className="bg-white/5 border border-white/10 p-xl rounded-[2rem] mb-xl shadow-inner">
+                  <div className="flex justify-between items-start mb-md">
+                     <div className="flex flex-col">
+                       <h3 className="text-xl font-black text-white mb-xs tracking-tight">{completingTask.titulo}</h3>
+                       <div className="flex gap-sm">
+                         <span className="badge badge-primary text-[9px] uppercase tracking-widest px-3 py-1">{completingTask.frecuencia}</span>
+                         <span className="badge badge-secondary text-[9px] uppercase tracking-widest px-3 py-1">{completingTask.tipo}</span>
+                       </div>
+                     </div>
+                     {completingTask.foto_url && (
+                       <img src={completingTask.foto_url} alt="Task" className="w-16 h-16 rounded-2xl object-cover border border-white/10 shadow-lg" />
+                     )}
+                  </div>
+                  <p className="text-sm text-muted leading-relaxed">{completingTask.descripcion || 'Sin descripción adicional.'}</p>
                 </div>
                 <div className="input-group">
                   <label className="input-label">Notas o Comentarios de la Revisión</label>
@@ -1235,33 +1249,44 @@ export default function Planificacion() {
                   </div>
                 )}
 
-                {/* VISTA DE EJECUCIÓN DETALLADA (GRID DE HABITACIONES) */}
+                {/* VISTA DE EJECUCIÓN DETALLADA (GRID DE HABITACIONES/ACTIVOS) */}
                 {isDetailedMode && (
-                  <div className="mt-lg border-t border-white/5 pt-lg space-y-lg">
-                    <div className="flex flex-col gap-md">
+                  <div className="mt-xl pt-xl border-t border-white/5 space-y-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex flex-col gap-lg">
                       <div className="flex justify-between items-end">
                         <div className="flex flex-col">
-                          <span className="text-xxs text-accent font-black tracking-widest uppercase mb-1">PROGRESO DE REVISIÓN</span>
-                          <h3 className="text-xl font-black text-white">Inspección de Unidades</h3>
+                          <span className="text-[10px] text-accent font-black tracking-widest uppercase mb-1">PROGRESO DE AUDITORÍA</span>
+                          <h3 className="text-2xl font-black text-white tracking-tight">Inspección Técnica</h3>
                         </div>
-                        <div className="bg-white/5 px-4 py-2 rounded-2xl border border-white/5">
-                           <span className="text-xs text-white font-bold">{Object.keys(inspectedRooms).length} <span className="text-muted">/ {rooms.length}</span></span>
+                        <div className="flex items-center gap-md">
+                           <div className="flex flex-col items-end">
+                              <span className="text-[10px] text-muted font-bold uppercase tracking-tighter">Completado</span>
+                              <span className="text-xl font-black text-white">
+                                {Object.keys(inspectedRooms).length} 
+                                <span className="text-muted/40 font-medium"> / {
+                                  (completingTask?.entidad_objetivo === 'activo_individual' ? 1 : rooms.length)
+                                }</span>
+                              </span>
+                           </div>
+                           <div className="w-12 h-12 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent">
+                              <Layers size={21} />
+                           </div>
                         </div>
                       </div>
 
-                      {/* FILTROS Y BÚSQUEDA */}
-                      <div className="flex flex-col gap-sm">
-                        <div className="flex p-1.5 bg-black/40 rounded-[1.25rem] border border-white/5">
+                      {/* FILTROS Y BÚSQUEDA REDISEÑADOS */}
+                      <div className="grid grid-cols-12 gap-sm items-center">
+                        <div className="col-span-12 md:col-span-7 flex p-1 bg-white/5 rounded-2xl border border-white/5 shadow-inner">
                           {[
                             { id: 'all', label: 'Todas', icon: LayoutGrid },
                             { id: 'pending', label: 'Pendientes', icon: Clock },
-                            { id: 'done', label: 'Revisadas', icon: ShieldCheck }
+                            { id: 'done', label: 'OK', icon: ShieldCheck }
                           ].map(t => (
                             <button
                               key={t.id}
                               type="button"
                               onClick={() => setRoomFilter(t.id as any)}
-                              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all duration-300 ${
+                              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all duration-300 ${
                                 roomFilter === t.id ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-muted hover:text-white hover:bg-white/5'
                               }`}
                             >
@@ -1271,12 +1296,12 @@ export default function Planificacion() {
                           ))}
                         </div>
 
-                        <div className="relative group">
+                        <div className="col-span-12 md:col-span-5 relative group">
                           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted group-focus-within:text-accent transition-colors" size={16} />
                           <input 
                             type="text" 
-                            placeholder="Buscar por número o nombre..." 
-                            className="w-full bg-white/5 border border-white/5 rounded-2xl pl-12 pr-4 h-12 text-sm text-white placeholder:text-muted focus:border-accent/30 focus:bg-white/[0.08] transition-all outline-none"
+                            placeholder="Buscar..." 
+                            className="w-full bg-white/5 border border-white/5 rounded-2xl pl-12 pr-4 h-11 text-sm text-white placeholder:text-muted focus:border-accent/30 focus:bg-white/[0.08] transition-all outline-none"
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                           />
@@ -1284,7 +1309,7 @@ export default function Planificacion() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 md:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto pr-md custom-scrollbar custom-grid-animate">
+                    <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-[460px] overflow-y-auto pr-md custom-scrollbar custom-grid-animate pb-4">
                       {(completingTask?.entidad_objetivo === 'activo_individual' 
                         ? assets.filter(a => a.id === completingTask.activo_id)
                         : rooms
@@ -1295,44 +1320,46 @@ export default function Planificacion() {
                           if (roomFilter === 'done') return !!inspectedRooms[r.id];
                           return true;
                         })
-                        .map(room => {
-                          const inspection = inspectedRooms[room.id];
+                        .map(unit => {
+                          const inspection = inspectedRooms[unit.id];
+                          const isAsset = !!unit.tipo; // Detectar si es activo o habitación
                           return (
                             <button
-                              key={room.id}
+                              key={unit.id}
                               type="button"
-                              onClick={() => handleOpenInspection(room)}
-                              className={`relative group flex flex-col items-center justify-center p-4 rounded-[2rem] border transition-all duration-500 overflow-hidden ${
+                              onClick={() => handleOpenInspection({ ...unit, tipo_entidad: isAsset ? 'activo' : 'habitacion' })}
+                              className={`relative group flex flex-col items-center justify-center p-5 rounded-[2.5rem] border transition-all duration-500 overflow-hidden shadow-sm ${
                                 inspection?.status === 'ok' ? 'bg-emerald-500/10 border-emerald-500/30' : 
                                 inspection?.status === 'issue' ? 'bg-amber-500/10 border-amber-500/30' : 
-                                'bg-white/5 border-white/5 hover:border-white/10'
+                                'bg-white/5 border-white/5 hover:border-white/20 hover:bg-white/[0.08] hover:scale-[1.05] active:scale-95'
                               }`}
                             >
-                              {/* Background Glow */}
-                              <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-500 bg-gradient-to-br ${
-                                inspection?.status === 'ok' ? 'from-emerald-500 to-transparent' : 
-                                inspection?.status === 'issue' ? 'from-amber-500 to-transparent' : 'from-white to-transparent'
+                              {/* Background Glow Effect */}
+                              <div className={`absolute -bottom-4 -right-4 w-12 h-12 blur-2xl opacity-0 group-hover:opacity-40 transition-opacity duration-700 rounded-full ${
+                                inspection?.status === 'ok' ? 'bg-emerald-500' : 
+                                inspection?.status === 'issue' ? 'bg-amber-500' : 'bg-accent'
                               }`} />
 
-                              <div className={`mb-3 p-3 rounded-2xl transition-all duration-300 transform group-hover:scale-110 ${
+                              <div className={`mb-3 w-12 h-12 flex items-center justify-center rounded-2xl transition-all duration-300 transform ${
                                 inspection?.status === 'ok' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40' : 
                                 inspection?.status === 'issue' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/40' : 
                                 'bg-white/10 text-muted group-hover:bg-white/20'
                               }`}>
-                                {inspection?.status === 'issue' ? <AlertTriangle size={20} /> : 
-                                 inspection?.status === 'ok' ? <ShieldCheck size={20} /> : <div className="w-5 h-5 flex items-center justify-center"><Circle size={8} fill="currentColor" /></div>}
+                                {inspection?.status === 'issue' ? <AlertCircle size={24} /> : 
+                                 inspection?.status === 'ok' ? <ShieldCheck size={24} /> : 
+                                 isAsset ? <Layers size={22} /> : <div className="text-xs font-bold">{unit.nombre[0]}</div>}
                               </div>
 
-                              <span className="text-sm font-black text-white tracking-tight leading-none mb-1">{room.nombre}</span>
-                              <span className={`text-[9px] font-black uppercase tracking-widest ${
+                              <span className="text-base font-black text-white tracking-tighter leading-none mb-1">{unit.nombre}</span>
+                              <span className={`text-[8px] font-black uppercase tracking-widest ${
                                 inspection ? 'text-white/40' : 'text-muted/40'
                               }`}>
-                                {inspection ? 'REVISADO' : 'PENDIENTE'}
+                                {inspection ? (inspection.status === 'ok' ? 'LISTO' : 'INCIDENCIA') : 'PENDIENTE'}
                               </span>
 
                               {inspection && (
-                                <div className="absolute top-3 right-3 animate-in zoom-in-50 duration-500">
-                                   <div className={`w-2.5 h-2.5 rounded-full ${inspection.status === 'ok' ? 'bg-emerald-500' : 'bg-amber-500'} ring-4 ring-black/20`} />
+                                <div className="absolute top-4 right-4 animate-in zoom-in-50 duration-500">
+                                   <div className={`w-2 h-2 rounded-full ${inspection.status === 'ok' ? 'bg-emerald-500' : 'bg-amber-500'} ring-4 ring-black/40`} />
                                 </div>
                               )}
                             </button>
@@ -1340,13 +1367,13 @@ export default function Planificacion() {
                         })}
                     </div>
 
-                    <div className="flex flex-col gap-3 mt-lg pt-lg border-t border-white/5">
+                    <div className="grid grid-cols-2 gap-3 mt-lg pt-lg border-t border-white/5">
                       <button 
                         type="button" 
-                        className={`w-full h-14 rounded-2xl font-black tracking-widest uppercase text-xs flex items-center justify-center gap-3 transition-opacity ${
-                          Object.keys(inspectedRooms).length < rooms.length 
-                          ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30 hover:bg-amber-500/30' 
-                          : 'bg-accent text-white shadow-xl shadow-accent/20'
+                        className={`h-16 rounded-[2rem] font-black tracking-widest uppercase text-xs flex items-center justify-center gap-3 transition-all ${
+                          Object.keys(inspectedRooms).length < (completingTask?.entidad_objetivo === 'activo_individual' ? 1 : rooms.length)
+                          ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20' 
+                          : 'bg-accent text-white shadow-2xl shadow-accent/30 hover:scale-[1.02] active:scale-95'
                         }`}
                         onClick={handleFinishDetailedExecution}
                         disabled={loading}
@@ -1354,20 +1381,20 @@ export default function Planificacion() {
                         {loading ? 'Finalizando...' : (
                           <>
                             <CheckCircle size={18} />
-                            {Object.keys(inspectedRooms).length < rooms.length 
-                              ? `FINALIZAR TODO (${Object.keys(inspectedRooms).length}/${rooms.length} LISTAS)` 
-                              : 'FINALIZAR Y PROGRAMAR SIGUIENTE'}
+                            {Object.keys(inspectedRooms).length < (completingTask?.entidad_objetivo === 'activo_individual' ? 1 : rooms.length)
+                              ? `FORZAR CIERRE (${Object.keys(inspectedRooms).length}/${(completingTask?.entidad_objetivo === 'activo_individual' ? 1 : rooms.length)})` 
+                              : 'FINALIZAR OPERACIÓN'}
                           </>
                         )}
                       </button>
 
                       <button 
                         type="button" 
-                        className="w-full h-12 rounded-2xl bg-white/5 text-muted hover:text-white hover:bg-white/10 font-bold text-xs flex items-center justify-center gap-2 transition-all border border-white/5"
+                        className="h-16 rounded-[2rem] bg-white/5 text-muted hover:text-white hover:bg-white/10 font-black tracking-widest uppercase text-xs flex items-center justify-center gap-3 transition-all border border-white/5"
                         onClick={handleSaveAndExit}
                       >
-                        <Save size={16} />
-                        GUARDAR PROGRESO Y CONTINUAR LUEGO
+                        <Save size={18} />
+                        SALIR Y GUARDAR
                       </button>
                     </div>
                   </div>
@@ -1410,60 +1437,63 @@ export default function Planificacion() {
                   <p className="text-base text-muted font-medium max-w-[240px] leading-relaxed">No hay elementos configurados para esta unidad.</p>
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
                   {inspectionChecklist.map((item, idx) => (
-                    <div key={idx} className="group flex items-center gap-4 p-4 rounded-3xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10 transition-all duration-300">
+                    <div key={idx} className="group flex items-center gap-4 p-5 rounded-[2rem] border border-white/5 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/10 transition-all duration-300 shadow-sm">
                       <div className="flex-1 flex flex-col">
-                        <span className="font-bold text-white text-base tracking-tight group-hover:translate-x-1 transition-transform">{item.name}</span>
-                        <span className={`text-[10px] font-black uppercase tracking-widest mt-0.5 ${
-                          item.status === 'bueno' ? 'text-emerald-500' :
-                          item.status === 'regular' ? 'text-amber-500' : 'text-rose-500'
-                        }`}>
-                          {item.status === 'bueno' ? 'Estado Cámara' : item.status === 'regular' ? 'Requiere Atención' : 'Defecto Crítico'}
-                        </span>
+                        <span className="font-black text-white text-lg tracking-tight group-hover:translate-x-1 transition-transform">{item.name}</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className={`w-1.5 h-1.5 rounded-full ${
+                            item.status === 'bueno' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
+                            item.status === 'regular' ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]'
+                          }`} />
+                          <span className={`text-[9px] font-black uppercase tracking-widest ${
+                            item.status === 'bueno' ? 'text-emerald-500' :
+                            item.status === 'regular' ? 'text-amber-500' : 'text-rose-500'
+                          }`}>
+                            {item.status === 'bueno' ? 'Estado Óptimo' : item.status === 'regular' ? 'Mantenimiento Pendiente' : 'Fallo Crítico'}
+                          </span>
+                        </div>
                       </div>
                       
-                      <div className="flex items-center gap-1.5 p-1.5 bg-black/40 rounded-2xl border border-white/5">
+                      <div className="flex items-center gap-2 p-1.5 bg-black/40 rounded-2xl border border-white/5">
                         <button 
                           type="button"
                           onClick={() => handleToggleItemStatus(idx, 'bueno')}
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 ${
+                          className={`flex items-center gap-2 px-5 py-3 rounded-xl transition-all duration-300 ${
                             item.status === 'bueno' 
-                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' 
-                              : 'text-muted hover:text-white hover:bg-white/5'
+                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                              : 'text-muted/40 hover:text-white hover:bg-white/5'
                           }`}
-                          title="Bueno"
                         >
-                          <ThumbsUp size={16} className={item.status === 'bueno' ? 'animate-bounce' : ''} />
+                          <ThumbsUp size={18} className={item.status === 'bueno' ? 'animate-bounce' : ''} />
                           <span className="text-[10px] font-black">OK</span>
                         </button>
 
                         <button 
                           type="button"
                           onClick={() => handleToggleItemStatus(idx, 'regular')}
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 ${
+                          className={`flex items-center gap-2 px-5 py-3 rounded-xl transition-all duration-300 ${
                             item.status === 'regular' 
-                              ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' 
-                              : 'text-muted hover:text-white hover:bg-white/5'
+                              ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' 
+                              : 'text-muted/40 hover:text-white hover:bg-white/5'
                           }`}
-                          title="Regular"
                         >
-                          <AlertCircle size={16} className={item.status === 'regular' ? 'animate-pulse' : ''} />
-                          <span className="text-[10px] font-black">FIX</span>
+                          <AlertCircle size={18} className={item.status === 'regular' ? 'animate-pulse' : ''} />
+                          <span className="text-[10px] font-black">ATTN</span>
                         </button>
 
                         <button 
                           type="button"
                           onClick={() => handleToggleItemStatus(idx, 'malo')}
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 ${
+                          className={`flex items-center gap-2 px-5 py-3 rounded-xl transition-all duration-300 ${
                             item.status === 'malo' 
-                              ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' 
-                              : 'text-muted hover:text-white hover:bg-white/5'
+                              ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' 
+                              : 'text-muted/40 hover:text-white hover:bg-white/5'
                           }`}
-                          title="Malo"
                         >
-                          <XCircle size={16} className={item.status === 'malo' ? 'animate-pulse' : ''} />
-                          <span className="text-[10px] font-black">BAD</span>
+                          <XCircle size={18} className={item.status === 'malo' ? 'animate-pulse' : ''} />
+                          <span className="text-[10px] font-black">FAIL</span>
                         </button>
                       </div>
                     </div>
@@ -1652,12 +1682,57 @@ export default function Planificacion() {
           color: var(--color-text-primary);
         }
         .v-calendar-container .rbc-agenda-table thead > tr > th {
-          background: rgba(99, 102, 241, 0.1);
+          background: rgba(110, 102, 241, 0.1);
           color: var(--color-accent);
           text-transform: uppercase;
           font-size: 0.75rem;
           padding: 12px;
-          border-bottom: 2px solid rgba(99, 102, 241, 0.2);
+          border-bottom: 2px solid rgba(110, 102, 241, 0.2);
+        }
+
+        /* ANIMACIONES Y EFECTOS PREMIUM */
+        @keyframes subtle-pulse {
+          0% { transform: scale(1); opacity: 0.8; }
+          50% { transform: scale(1.1); opacity: 1; }
+          100% { transform: scale(1); opacity: 0.8; }
+        }
+
+        .custom-grid-animate {
+          animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .shadow-accent {
+          box-shadow: 0 10px 40px -10px rgba(99, 102, 241, 0.4);
+        }
+
+        .glass-card-premium {
+          background: rgba(10, 10, 15, 0.8);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+        .btn-premium {
+          background: linear-gradient(135deg, var(--color-accent) 0%, #4f46e5 100%);
+          color: white;
+          font-weight: 800;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          transition: all 0.3s ease;
+        }
+        .btn-premium:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.5);
         }
         .v-calendar-container .rbc-agenda-date-cell, 
         .v-calendar-container .rbc-agenda-time-cell {
