@@ -162,7 +162,7 @@ export default function Mantenimiento() {
       .from('habitaciones')
       .select(`
         *,
-        activos:activos(id, nombre, estado, categoria)
+        activos:activos(id, nombre, estado, tipo)
       `)
       .eq('zona_id', zoneId)
     setRooms(rData || [])
@@ -283,7 +283,7 @@ export default function Mantenimiento() {
                            </div>
                            <div>
                               <h4 className="font-black text-lg">{activo.nombre}</h4>
-                              <span className="text-[10px] text-muted uppercase font-bold tracking-widest">{activo.categoria}</span>
+                              <span className="text-[10px] text-muted uppercase font-bold tracking-widest">{activo.tipo}</span>
                            </div>
                         </div>
                      </div>

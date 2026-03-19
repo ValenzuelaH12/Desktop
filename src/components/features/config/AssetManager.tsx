@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, Trash2, MapPin, Calendar, ExternalLink } from 'lucide-react';
+import { Package, Plus, Trash2, MapPin, Calendar, ExternalLink, Box } from 'lucide-react';
 import { configService } from '../../../services/configService';
 import { Asset, Zone } from '../../../types';
 import { Card } from '../../ui/Card';
@@ -8,15 +8,17 @@ import { Modal } from '../../ui/Modal';
 import { Badge } from '../../ui/Badge';
 
 interface AssetManagerProps {
-  zones: Zone[];
+  zones: any[];
+  rooms: any[];
   onMessage: (msg: { type: 'success' | 'error', text: string }) => void;
   activeHotelId: string | null;
-  assets: Asset[];
+  assets: any[];
   onRefresh: () => void;
 }
 
 export const AssetManager: React.FC<AssetManagerProps> = ({ 
   zones,
+  rooms,
   onMessage,
   activeHotelId,
   assets,
@@ -29,6 +31,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({
     nombre: '',
     tipo: 'maquinaria',
     zona_id: '',
+    habitacion_id: '',
     manual_url: '',
     especificaciones: {},
     hotel_id: activeHotelId || ''
@@ -52,7 +55,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({
       await configService.create('activos', { ...newAsset, hotel_id: activeHotelId });
       onMessage({ type: 'success', text: 'Activo registrado correctamente.' });
       setIsAddingAsset(false);
-      setNewAsset({ nombre: '', tipo: 'maquinaria', zona_id: '', manual_url: '', especificaciones: {}, hotel_id: activeHotelId || '' });
+      setNewAsset({ nombre: '', tipo: 'maquinaria', zona_id: '', habitacion_id: '', manual_url: '', especificaciones: {}, hotel_id: activeHotelId || '' });
       onRefresh();
     } catch (error: any) {
       onMessage({ type: 'error', text: error.message });
@@ -113,9 +116,17 @@ export const AssetManager: React.FC<AssetManagerProps> = ({
                       </div>
                     </td>
                     <td className="py-4 px-6">
-                      <div className="flex items-center gap-xs text-muted font-medium text-xs">
-                        <MapPin size={12} className="text-accent/60" />
-                        {zones.find(z => z.id === a.zona_id)?.nombre || 'General'}
+                      <div className="flex flex-col gap-xs text-muted font-medium text-[10px] uppercase tracking-widest">
+                        <div className="flex items-center gap-xs">
+                          <MapPin size={10} className="text-accent/60" />
+                          {zones.find(z => z.id === a.zona_id)?.nombre || 'General'}
+                        </div>
+                        {a.habitacion_id && (
+                          <div className="flex items-center gap-xs text-accent">
+                             <Box size={10} />
+                             {rooms.find(r => r.id === a.habitacion_id)?.nombre}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="py-4 px-6">
@@ -201,11 +212,25 @@ export const AssetManager: React.FC<AssetManagerProps> = ({
             <select 
               className="select" 
               value={newAsset.zona_id} 
-              onChange={e => setNewAsset({...newAsset, zona_id: e.target.value})}
+              onChange={e => setNewAsset({...newAsset, zona_id: e.target.value, habitacion_id: ''})}
               required
             >
               <option value="">Seleccionar Zona...</option>
               {zones.map(z => <option key={z.id} value={z.id}>{z.nombre}</option>)}
+            </select>
+          </div>
+          <div className="input-group">
+            <label className="input-label">Habitación (Opcional)</label>
+            <select 
+              className="select" 
+              value={newAsset.habitacion_id} 
+              onChange={e => setNewAsset({...newAsset, habitacion_id: e.target.value})}
+              disabled={!newAsset.zona_id}
+            >
+              <option value="">Asignar a habitación...</option>
+              {rooms.filter(r => r.zona_id === newAsset.zona_id).map(r => (
+                <option key={r.id} value={r.id}>{r.nombre}</option>
+              ))}
             </select>
           </div>
         </div>

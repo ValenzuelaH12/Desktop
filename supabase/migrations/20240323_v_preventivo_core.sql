@@ -9,9 +9,9 @@ BEGIN
 END $$;
 
 ALTER TABLE public.activos 
-ADD COLUMN IF NOT EXISTS estado estado_activo DEFAULT 'bueno',
-ADD COLUMN IF NOT EXISTS ultima_inspeccion timestamptz,
-ADD COLUMN IF NOT EXISTS proxima_inspeccion timestamptz;
+ADD COLUMN IF NOT EXISTS habitacion_id uuid REFERENCES public.habitaciones(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN public.activos.habitacion_id IS 'Vincula un objeto/activo con una habitación específica para mantenimiento preventivo';
 
 -- 2. Tabla de Control de Filtros de Aire
 CREATE TABLE IF NOT EXISTS public.mantenimiento_filtros (

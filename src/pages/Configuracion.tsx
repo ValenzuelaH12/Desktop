@@ -159,6 +159,7 @@ export default function Configuracion() {
           {activeTab === 'activos' && (
             <AssetManager 
               zones={zonas} 
+              rooms={habitaciones}
               assets={activos}
               activeHotelId={activeHotelId}
               onMessage={showMsg} 
