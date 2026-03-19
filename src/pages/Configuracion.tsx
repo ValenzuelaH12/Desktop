@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Users, Hotel, Settings, Package, QrCode, Smartphone, Activity, Calendar, 
-  Layers, MapPin, Check, X, Bell, Building2
+  Layers, MapPin, Check, X, Bell, Building2, ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -48,8 +48,6 @@ export default function Configuracion() {
   const { data: contadores = [], isLoading: countersLoading, refetch: refetchCounters } = useCounters(activeHotelId);
   const { data: tipos = [], isLoading: typesLoading, refetch: refetchIncidentTypes } = useIncidentTypes(activeHotelId);
   
-  // Mantenimiento aún usa supabase directamente por ahora, o podemos centralizarlo luego
-
   const loading = usersLoading || zonesLoading || roomsLoading || assetsLoading || countersLoading || typesLoading;
   
   const fetchAll = () => {
