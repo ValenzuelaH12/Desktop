@@ -24,6 +24,8 @@ export const aiService = {
 
       // Convertir la URL de Supabase a base64 para Gemini
       const response = await fetch(imageUrl);
+      if (!response.ok) throw new Error(`Fallo al descargar la imagen: ${response.statusText}`);
+      
       const blob = await response.blob();
       const reader = new FileReader();
       
@@ -60,9 +62,9 @@ export const aiService = {
       // Limpiar posibles bloques de código de la respuesta
       const jsonStr = text.replace(/```json|```/g, "").trim();
       return JSON.parse(jsonStr) as AIAnalysisResult;
-    } catch (error) {
-      console.error("AI Analysis Error:", error);
-      throw new Error("No se pudo completar el análisis de IA. Verifica la conexión y la API Key.");
+    } catch (error: any) {
+      console.error("❌ ERROR EN AI SERVICE:", error);
+      throw new Error(`Error en el motor de IA: ${error.message}`);
     }
   },
 

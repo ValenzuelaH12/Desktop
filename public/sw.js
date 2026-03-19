@@ -29,6 +29,6 @@ self.addEventListener('notificationclick', function(event) {
   if (event.action === 'close') return;
 
   event.waitUntil(
-    clients.openWindow(event.notification.data.url)
+    self.clients.openWindow(event.notification.data.url)
   );
 });

@@ -382,9 +382,9 @@ export default function Incidencias() {
         selectedIncident.title
       )
       setAiResult(result)
-    } catch (error) {
-      console.error(error)
-      alert("Error al analizar la imagen con IA")
+    } catch (error: any) {
+      console.error("DETALLE ERROR V-AI:", error)
+      toast.error(`Error de IA: ${error.message || 'Error en el motor v-ai'}`)
     } finally {
       setIsAnalyzing(false)
     }
