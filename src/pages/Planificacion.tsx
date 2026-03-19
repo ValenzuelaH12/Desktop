@@ -58,6 +58,7 @@ export default function Planificacion() {
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState({ type: '', text: '' })
   const [completingTask, setCompletingTask] = useState<any>(null)
+  const [dbCategories, setDbCategories] = useState<any[]>([])
   
   // -- ESTADOS PARA EJECUCIÓN DETALLADA --
   const [isDetailedMode, setIsDetailedMode] = useState(false)
@@ -171,6 +172,7 @@ export default function Planificacion() {
         frecuencia: newForm.frecuencia,
         proxima_fecha: creatingTask.fecha,
         tipo: newForm.tipo,
+        foto_url: newForm.foto_url,
         checklist_items: newForm.checklist_items,
         hotel_id: activeHotelId
       }
@@ -240,7 +242,11 @@ export default function Planificacion() {
       setInspectionChecklist(existing.checklist);
     } else {
       const task = tasks.find(t => t.id === executingTaskId);
-      const checklist = task?.checklist_items?.length > 0 ? task.checklist_items : [];
+      // Fallback: item-specific checklist OR category items
+      const checklist = (task?.checklist_items?.length > 0) 
+        ? task.checklist_items 
+        : (dbCategories.find(c => c.nombre === task?.categoria)?.subcategorias || []);
+      
       setInspectionChecklist(checklist.map((name: string) => ({ name, status: 'bueno' })));
     }
   };
@@ -372,12 +378,23 @@ export default function Planificacion() {
     fetchTasks()
     fetchHistory()
     fetchElements()
+    fetchCategories()
     if (activeHotelId) {
        // Fetch rooms for detailed maintenance
        supabase.from('habitaciones').select('*').eq('hotel_id', activeHotelId).order('nombre')
          .then(({ data }) => setRooms(data || []));
     }
   }, [activeHotelId])
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase.from('mantenimiento_categorias').select('*').order('nombre');
+      if (error) throw error;
+      setDbCategories(data || []);
+    } catch (e: any) {
+      console.error('Error fetching categories:', e);
+    }
+  };
 
   const fetchTasks = async () => {
     try {
@@ -1205,35 +1222,42 @@ export default function Planificacion() {
               <h2>Inspección Hab. {selectedRoom.nombre}</h2>
               <button className="btn-icon btn-ghost" onClick={() => setSelectedRoom(null)}><X size={20} /></button>
             </div>
-            <div className="modal-body p-lg flex flex-col gap-lg">
+            <div className="modal-body p-lg flex flex-col gap-lg overflow-y-auto" style={{ maxHeight: '70vh' }}>
               <div className="flex flex-col gap-md">
-                {inspectionChecklist.map((item, idx) => (
-                  <div key={idx} className="p-md rounded-2xl border border-white/5 bg-white/5 flex flex-col gap-sm">
-                    <div className="flex justify-between items-center px-xs">
-                      <span className="font-bold text-white uppercase text-xs">{item.name}</span>
-                      {item.status === 'bueno' && <span className="bg-emerald-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">BUEN ESTADO</span>}
-                      {item.status === 'regular' && <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">ESTADO MEDIO</span>}
-                      {item.status === 'malo' && <span className="bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">MAL ESTADO</span>}
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-2">
-                       {['bueno', 'regular', 'malo'].map(st => (
-                         <button 
-                           key={st}
-                           type="button"
-                           onClick={() => handleToggleItemStatus(idx, st as any)}
-                           className={`py-2 rounded-xl text-[10px] font-black transition-all ${
-                             item.status === st 
-                               ? (st === 'bueno' ? 'bg-emerald-500 text-white' : st === 'regular' ? 'bg-amber-500 text-white' : 'bg-rose-500 text-white') 
-                               : 'bg-white/5 text-muted'
-                           }`}
-                         >
-                           {st === 'bueno' ? 'BUENO' : st === 'regular' ? 'MEDIO' : 'MALO'}
-                         </button>
-                       ))}
-                    </div>
+                {inspectionChecklist.length === 0 ? (
+                  <div className="p-xl text-center">
+                    <History size={32} className="mx-auto text-muted mb-md opacity-20" />
+                    <p className="text-sm text-muted">Esta tarea no tiene elementos de checklist configurados.</p>
                   </div>
-                ))}
+                ) : (
+                  inspectionChecklist.map((item, idx) => (
+                    <div key={idx} className="p-md rounded-2xl border border-white/5 bg-white/5 flex flex-col gap-sm">
+                      <div className="flex justify-between items-center px-xs">
+                        <span className="font-bold text-white uppercase text-xs">{item.name}</span>
+                        {item.status === 'bueno' && <span className="bg-emerald-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">BUEN ESTADO</span>}
+                        {item.status === 'regular' && <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">ESTADO MEDIO</span>}
+                        {item.status === 'malo' && <span className="bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">MAL ESTADO</span>}
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2">
+                        {['bueno', 'regular', 'malo'].map(st => (
+                          <button 
+                            key={st}
+                            type="button"
+                            onClick={() => handleToggleItemStatus(idx, st as any)}
+                            className={`py-2 rounded-xl text-[10px] font-black transition-all ${
+                              item.status === st 
+                                ? (st === 'bueno' ? 'bg-emerald-500 text-white' : st === 'regular' ? 'bg-amber-500 text-white' : 'bg-rose-500 text-white') 
+                                : 'bg-white/5 text-muted'
+                            }`}
+                          >
+                            {st === 'bueno' ? 'BUENO' : st === 'regular' ? 'MEDIO' : 'MALO'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
               <button 
                 type="button" 
