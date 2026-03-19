@@ -239,11 +239,11 @@ export default function Dashboard() {
                     <div className="incident-bottom">
                       <span className="badge badge-neutral">Hab. {incident.location}</span>
                       <span className={`badge badge-${
-                        incident.status === 'resolved' ? 'success' : 
-                        incident.status === 'in-progress' ? 'warning' : 'danger'
+                        (incident.status === 'resolved' || incident.status === 'resuelto') ? 'success' : 
+                        (incident.status === 'in-progress' || incident.status === 'proceso') ? 'warning' : 'danger'
                       }`}>
-                        {incident.status === 'resolved' ? 'Resuelta' : 
-                         incident.status === 'in-progress' ? 'En proceso' : 'Pendiente'}
+                        {(incident.status === 'resolved' || incident.status === 'resuelto') ? 'Resuelta' : 
+                         (incident.status === 'in-progress' || incident.status === 'proceso') ? 'En proceso' : 'Pendiente'}
                       </span>
                     </div>
                   </div>
