@@ -14,7 +14,8 @@ import {
   MapPin,
   PlusCircle,
   MessageSquare,
-  Play
+  Play,
+  Calendar
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -73,6 +74,10 @@ export default function MantenimientoTareas() {
   }
 
   const handleStartTask = (task: any) => {
+    if (!task?.plan?.items_base) {
+       console.error("Tarea sin items base definidos", task);
+       return;
+    }
     setCurrentTask(task)
     // Inicializar items desde el plan (items_base)
     const initialItems = task.plan.items_base.map((name: string) => ({
@@ -106,7 +111,8 @@ export default function MantenimientoTareas() {
     setSaving(true)
     try {
       const hotelId = activeHotelId;
-      const userId = (await supabase.auth.getUser()).data.user?.id;
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
 
       // 1. Guardar cada item en mantenimiento_items_log
       const itemLogs = items.map(item => ({
@@ -132,11 +138,10 @@ export default function MantenimientoTareas() {
 
       if (taskErr) throw taskErr
 
-      alert('✅ Tarea finalizada con éxito.')
       setCurrentTask(null)
       fetchTasks()
     } catch (err: any) {
-      alert('Error: ' + err.message)
+      console.error('Error al finalizar tarea:', err)
     } finally {
       setSaving(false)
     }
@@ -144,14 +149,14 @@ export default function MantenimientoTareas() {
 
   // Lanzar un plan (Generar tareas para todo su scope)
   const handleLaunchPlan = async (plan: any) => {
-     if (!confirm(`¿Generar tareas para todas las ubicaciones del plan "${plan.nombre}"?`)) return;
+     if (!activeHotelId) return;
      setLoading(true);
      try {
         const tareasParaInsertar: any[] = [];
         const hoy = new Date().toISOString().split('T')[0];
 
-        plan.scope.forEach((zona: any) => {
-           zona.espacios.forEach((espacio: string) => {
+        plan.scope?.forEach((zona: any) => {
+           zona.espacios?.forEach((espacio: string) => {
               tareasParaInsertar.push({
                  hotel_id: activeHotelId,
                  plan_id: plan.id,
@@ -163,18 +168,14 @@ export default function MantenimientoTareas() {
            });
         });
 
-        if (tareasParaInsertar.length === 0) {
-           alert('El plan no tiene ubicaciones configuradas.');
-           return;
-        }
+        if (tareasParaInsertar.length === 0) return;
 
         const { error } = await supabase.from('mantenimiento_tareas').insert(tareasParaInsertar);
         if (error) throw error;
 
-        alert(`🚀 Se han generado ${tareasParaInsertar.length} tareas nuevas.`);
         fetchTasks();
      } catch (err: any) {
-        alert('Error: ' + err.message);
+        console.error('Error al lanzar plan:', err);
      } finally {
         setLoading(false);
      }
