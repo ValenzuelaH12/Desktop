@@ -19,6 +19,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const totalUnread = Object.values(unreadPerChannel).reduce((acc: number, count: number) => acc + count, 0)
 
   useEffect(() => {
+    // Registro de Service Worker para PWA / Push
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(err => {
+        console.error('Error registrando Service Worker:', err)
+      })
+    }
+
     if (typeof Notification !== 'undefined' && permission === 'default') {
       Notification.requestPermission().then(setPermission)
     }
@@ -117,6 +124,24 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           toast.info(`[V-NEXUS] ${inc.title} en ${inc.location}`)
         }
       })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'incidencias',
+      }, (payload) => {
+        const inc = payload.new
+        const oldInc = payload.old
+        
+        // Notificar si se le asigna al usuario actual
+        if (inc.assigned_to === profile.id && oldInc.assigned_to !== profile.id) {
+          sendNotification('📍 NUEVA ASIGNACIÓN', {
+            body: `Se te ha asignado: ${inc.title} en ${inc.location}`,
+            tag: `assign-${inc.id}`,
+            icon: '/icon-192x192.png'
+          })
+          toast.info(`Nueva incidencia asignada: ${inc.title}`)
+        }
+      })
       .subscribe((status) => {
         console.log('📡 Estado de suscripción global:', status)
       })
@@ -137,6 +162,40 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const dismissNotification = (id: string) => {
     setChatNotifications(prev => prev.filter(n => n.id !== id))
   }
+
+  // Monitor de Alertas Críticas (2h sin atención)
+  useEffect(() => {
+    if (!profile || (profile.rol !== 'admin' && profile.rol !== 'super_admin')) return
+
+    const checkDelays = async () => {
+      const { data: pendings } = await supabase
+        .from('incidencias')
+        .select('*')
+        .eq('status', 'pending')
+        .eq('priority', 'high')
+
+      if (!pendings) return
+
+      const now = new Date().getTime()
+      pendings.forEach(inc => {
+        const created = new Date(inc.created_at).getTime()
+        const diffHours = (now - created) / (1000 * 60 * 60)
+
+        if (diffHours > 2) {
+          sendNotification('⚠️ ALERTA DE RETRASO', {
+            body: `CRÍTICO: Incidencia #${inc.id} (${inc.title}) lleva ${Math.floor(diffHours)}h sin atención.`,
+            tag: `delay-${inc.id}`,
+            requireInteraction: true
+          })
+        }
+      })
+    }
+
+    const timer = setInterval(checkDelays, 1000 * 60 * 30) // Cada 30 min
+    checkDelays() // Ejecutar una vez al inicio
+
+    return () => clearInterval(timer)
+  }, [profile])
 
   return (
     <NotificationContext.Provider value={{ 

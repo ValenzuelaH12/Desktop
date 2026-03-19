@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Plus, Filter, Search, MoreVertical, MapPin, Clock, X, CheckCircle, Image as ImageIcon, Video, Paperclip, MessageSquare, History, AlertCircle, RefreshCw, Download, FileText, FileSpreadsheet, Trash2 } from 'lucide-react'
+import { Plus, Filter, Search, MoreVertical, MapPin, Clock, X, CheckCircle, Image as ImageIcon, Video, Paperclip, MessageSquare, History, AlertCircle, RefreshCw, Download, FileText, FileSpreadsheet, Trash2, Check, Sparkles, ImageIcon as LucideImageIcon } from 'lucide-react'
+import { aiService, AIAnalysisResult } from '../services/aiService'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
@@ -34,6 +35,9 @@ export default function Incidencias() {
   const [uploading, setUploading] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [incidentToDelete, setIncidentToDelete] = useState<string | null>(null)
+  const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
 
   useEffect(() => {
     fetchIncidents()
@@ -365,6 +369,25 @@ export default function Incidencias() {
 
     doc.save(`Incidencias_VSuite_${new Date().toISOString().split('T')[0]}.pdf`)
     setShowExportMenu(false)
+  }
+
+  const handleAIAnalysis = async () => {
+    if (!selectedIncident?.media_urls?.[0]) return
+    
+    setIsAnalyzing(true)
+    setAiResult(null)
+    try {
+      const result = await aiService.analyzeIncidentImage(
+        selectedIncident.media_urls[0],
+        selectedIncident.title
+      )
+      setAiResult(result)
+    } catch (error) {
+      console.error(error)
+      alert("Error al analizar la imagen con IA")
+    } finally {
+      setIsAnalyzing(false)
+    }
   }
 
   return (
@@ -759,10 +782,22 @@ export default function Incidencias() {
               </section>
 
               <section className="mb-xl p-lg glass rounded-2xl">
-                <h3 className="section-title flex items-center gap-sm mb-lg text-sm font-bold uppercase tracking-widest">
-                  <ImageIcon size={18} className="text-accent" />
-                  Multimedia y Archivos
-                </h3>
+                <div className="flex justify-between items-center mb-lg">
+                  <h3 className="section-title flex items-center gap-sm font-bold uppercase tracking-widest text-sm">
+                    <LucideImageIcon size={18} className="text-accent" />
+                    Multimedia y Archivos
+                  </h3>
+                  {selectedIncident.media_urls?.length > 0 && (
+                    <button 
+                      className="btn btn-xs btn-accent flex items-center gap-xs"
+                      onClick={handleAIAnalysis}
+                      disabled={isAnalyzing}
+                    >
+                      {isAnalyzing ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      <span>{isAnalyzing ? 'Analizando...' : 'Analizar con V-AI'}</span>
+                    </button>
+                  )}
+                </div>
                 
                 <div className="media-grid">
                   {selectedIncident.media_urls?.map((url, i) => (
@@ -787,6 +822,24 @@ export default function Incidencias() {
                     <input type="file" hidden accept="image/*,video/*" onChange={handleFileUpload} disabled={uploading} />
                   </label>
                 </div>
+
+                {aiResult && (
+                  <div className="mt-lg p-md bg-accent/10 border border-accent/20 rounded-xl animate-fade-in">
+                    <h4 className="text-xs font-bold text-accent uppercase mb-sm flex items-center gap-xs">
+                      <Sparkles size={14} /> Diagnóstico Inteligente (Gemini)
+                    </h4>
+                    <div className="text-sm leading-relaxed mb-md">
+                      <p className="text-primary"><strong className="text-accent">Detección:</strong> {aiResult.diagnostico}</p>
+                      <p className="mt-xs text-primary"><strong className="text-accent">Sugerencia:</strong> {aiResult.sugerencia}</p>
+                      <p className="mt-xs text-primary"><strong className="text-accent">Depto:</strong> {aiResult.departamento}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-xs">
+                      {aiResult.materiales_sugeridos.map(m => (
+                        <span key={m} className="badge badge-accent text-[10px]">{m}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </section>
 
               <section className="p-lg glass rounded-2xl">

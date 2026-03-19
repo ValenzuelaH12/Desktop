@@ -11,8 +11,10 @@ import {
   ChevronDown,
   Filter,
   Download,
-  Calendar
+  Calendar,
+  Sparkles
 } from 'lucide-react'
+import { aiService } from '../services/aiService'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import jsPDF from 'jspdf'
@@ -58,6 +60,8 @@ export default function VInsights() {
     criticalZones: [],
     efficiencyScore: 0
   })
+  const [anomaly, setAnomaly] = useState<string | null>(null)
+  const [isCheckingAnomalies, setIsCheckingAnomalies] = useState(false)
 
   useEffect(() => {
     fetchInsightsData()
@@ -216,6 +220,19 @@ export default function VInsights() {
           : 0
       })
 
+      // 3. AI Anomaly Detection
+      if (days.length >= 3) {
+        setIsCheckingAnomalies(true)
+        const sample = days.slice(-7).map(d => ({
+          fecha: d,
+          ...dailyConsumption[d]
+        }))
+        aiService.detectAnomalies(sample).then(res => {
+          setAnomaly(res)
+          setIsCheckingAnomalies(false)
+        })
+      }
+
     } catch (error) {
       console.error('Error fetching insights:', error)
     } finally {
@@ -343,6 +360,23 @@ export default function VInsights() {
           </button>
         </div>
       </div>
+
+      {anomaly && (
+        <div className="glass-card mb-xl p-lg border-l-4 border-l-danger animate-fade-in" style={{ background: 'rgba(239, 68, 68, 0.05)' }}>
+          <div className="flex items-center gap-lg">
+            <div className="p-md bg-danger/10 rounded-full text-danger border border-danger/20">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-sm mb-xs">
+                <Sparkles size={16} className="text-danger" />
+                <h4 className="text-sm font-bold text-danger uppercase tracking-widest">Alerta V-Insights AI</h4>
+              </div>
+              <p className="text-secondary tracking-wide">{anomaly}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex flex-col items-center justify-center p-xl min-h-[400px]">

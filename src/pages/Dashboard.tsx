@@ -3,17 +3,15 @@ import {
   CheckCircle, 
   Clock, 
   Activity,
-  ArrowUpRight,
-  MessageSquare,
-  Printer,
   FileText,
   ChevronRight,
   X,
   RefreshCw,
-  Check
+  Check,
+  Printer
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Line } from 'react-chartjs-2'
@@ -22,6 +20,7 @@ import { useIncidents } from '../hooks/useIncidents'
 import { useLowStockAlerts } from '../hooks/useInventory'
 import { useReadingTrends } from '../hooks/useReadings'
 import jsPDF from 'jspdf'
+import { Skeleton } from '../components/ui/Skeleton'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
@@ -29,7 +28,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { user, activeHotelId } = useAuth()
   
-  // State for reports (not easily movable to hooks without more logic)
+  // State for reports
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [reportDates, setReportDates] = useState({
     start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
@@ -42,7 +41,9 @@ export default function Dashboard() {
   const { data: lowStock = [], isLoading: stockLoading } = useLowStockAlerts(activeHotelId)
   const { data: readingTrends = {}, isLoading: trendsLoading } = useReadingTrends(activeHotelId)
 
-  // Calcluate Stats
+  const loading = incLoading || stockLoading || trendsLoading
+
+  // Calculate Stats
   const stats = useMemo(() => {
     const active = allIncidents.filter(i => i.status !== 'resuelto' && i.status !== 'resolved').length
     const resolvedToday = allIncidents.filter(i => 
@@ -58,37 +59,24 @@ export default function Dashboard() {
     ]
   }, [allIncidents, lowStock])
 
-  const recentIncidents = useMemo(() => allIncidents.slice(0, 5), [allIncidents])
-  const myTasks = useMemo(() => allIncidents.filter(i => i.assigned_to === user?.id && i.status !== 'resuelto' && i.status !== 'resolved').slice(0, 5), [allIncidents, user])
-
-  const loading = incLoading || stockLoading || trendsLoading
-
-  // fetchDashboardData eliminated in favor of reactive hooks
-
-
   const generateProReport = async () => {
     setIsGenerating(true)
     try {
       const { start, end } = reportDates
       
-      // 1. Incidencias en el periodo
       let qInc = supabase.from('incidencias').select('*').gte('created_at', start).lte('created_at', end + 'T23:59:59')
       if (activeHotelId) qInc = qInc.eq('hotel_id', activeHotelId)
       const { data: incs } = await qInc
 
-      // 2. Mantenimiento en el periodo
       let qMant = supabase.from('historial_mantenimiento').select('*, tarea:tarea_id(titulo)').gte('completado_el', start).lte('completado_el', end + 'T23:59:59')
       if (activeHotelId) qMant = qMant.eq('hotel_id', activeHotelId)
       const { data: maintenance } = await qMant
 
-      // 3. Consumos (Agregado básico para el reporte)
       let qRead = supabase.from('lecturas').select('*, contador:contador_id(nombre, tipo)').gte('fecha', start).lte('fecha', end).order('fecha', { ascending: true })
-      // Assuming lecturas table has hotel_id, otherwise we filter by counters
       if (activeHotelId) qRead = qRead.eq('hotel_id', activeHotelId)
       const { data: readings } = await qRead
 
-      // Procesar consumos por tipo
-      const consumos = readings?.reduce((acc, curr, idx, arr) => {
+      const consumos = readings?.reduce((acc: any, curr: any, idx, arr) => {
         const next = arr.find((r, i) => i > idx && r.contador_id === curr.contador_id)
         if (next) {
           const diff = next.valor - curr.valor
@@ -100,10 +88,8 @@ export default function Dashboard() {
       const doc = new jsPDF()
       const { default: autoTable } = await import('jspdf-autotable')
 
-      // Diseño del PDF
       doc.setFillColor(10, 10, 26)
       doc.rect(0, 0, 210, 40, 'F')
-      
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(22)
       doc.text('V-SUITE', 14, 25)
@@ -114,16 +100,15 @@ export default function Dashboard() {
       doc.text(`Periodo: ${new Date(start).toLocaleDateString()} al ${new Date(end).toLocaleDateString()}`, 14, 48)
       doc.text(`Generado el: ${new Date().toLocaleString()}`, 14, 54)
 
-      // KPIs
       doc.setTextColor(0, 0, 0)
       doc.setFontSize(14)
       doc.text('Métricas Clave', 14, 70)
       
       const kpiData = [
         ['Incidencias Reportadas', incs?.length || 0],
-        ['Incidencias Resueltas', incs?.filter(i => i.status === 'resolved').length || 0],
+        ['Incidencias Resueltas', incs?.filter(i => i.status === 'resolved' || i.status === 'resuelto').length || 0],
         ['Mantenimientos Ejecutados', maintenance?.length || 0],
-        ['Eficiencia de Resolución', incs?.length ? Math.round((incs.filter(i => i.status === 'resolved').length / incs.length) * 100) + '%' : 'N/A']
+        ['Eficiencia de Resolución', incs?.length ? Math.round((incs.filter(i => i.status === 'resolved' || i.status === 'resuelto').length / incs.length) * 100) + '%' : 'N/A']
       ]
 
       autoTable(doc, {
@@ -132,44 +117,6 @@ export default function Dashboard() {
         body: kpiData,
         theme: 'striped',
         headStyles: { fillColor: [99, 102, 241] },
-        styles: { fontSize: 10 }
-      })
-
-      let finalY = (doc as any).lastAutoTable.finalY + 15
-
-      // Tabla de Consumos
-      doc.text('Consumo de Suministros', 14, finalY)
-      const consumosData = Object.entries(consumos || {}).map(([tipo, valor]) => [
-        tipo.toUpperCase(),
-        valor.toLocaleString() + (tipo === 'agua' ? ' m³' : tipo === 'luz' ? ' kWh' : ' m³')
-      ])
-
-      autoTable(doc, {
-        startY: finalY + 5,
-        head: [['Suministro', 'Total Consumido']],
-        body: consumosData.length ? consumosData : [['Sin datos', '0']],
-        theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129] },
-        styles: { fontSize: 10 }
-      })
-
-      finalY = (doc as any).lastAutoTable.finalY + 15
-      
-      // Tabla de Incidencias por Zona
-      doc.text('Distribución de Incidencias por Zona', 14, finalY)
-      const zonesData = incs?.reduce((acc, curr) => {
-        acc[curr.location] = (acc[curr.location] || 0) + 1
-        return acc
-      }, {})
-      
-      const zonesTableData = Object.entries(zonesData || {}).map(([zona, count]) => [zona, count])
-
-      autoTable(doc, {
-        startY: finalY + 5,
-        head: [['Zona / Habitación', 'Total Incidencias']],
-        body: zonesTableData.length ? zonesTableData : [['Sin datos', '0']],
-        theme: 'striped',
-        headStyles: { fillColor: [245, 158, 11] },
         styles: { fontSize: 10 }
       })
 
@@ -197,22 +144,31 @@ export default function Dashboard() {
       </div>
 
       <div className="stats-grid">
-        {stats.map((stat) => {
-          const Icon = stat.icon
-          return (
-            <div key={stat.id} className="stat-card glass-card">
-              <div className="stat-header">
-                <span className="stat-title">{stat.title}</span>
-                <div className={`stat-icon-wrapper text-${stat.color} bg-${stat.color}-light`}>
-                  <Icon size={20} />
+        {loading ? (
+          [1, 2, 3, 4].map(i => (
+            <div key={i} className="stat-card glass-card">
+              <Skeleton variant="text" width="60%" height="1.2rem" />
+              <Skeleton variant="text" width="40%" height="2rem" />
+            </div>
+          ))
+        ) : (
+          stats.map((stat) => {
+            const Icon = stat.icon
+            return (
+              <div key={stat.id} className="stat-card glass-card">
+                <div className="stat-header">
+                  <span className="stat-title">{stat.title}</span>
+                  <div className={`stat-icon-wrapper text-${stat.color} bg-${stat.color}-light`}>
+                    <Icon size={20} />
+                  </div>
+                </div>
+                <div className="stat-body">
+                  <h3 className="stat-value">{stat.value}</h3>
                 </div>
               </div>
-              <div className="stat-body">
-                <h3 className="stat-value">{stat.value}</h3>
-              </div>
-            </div>
-          )
-        })}
+            )
+          })
+        )}
       </div>
 
       <div className="dashboard-grid mt-xl">
@@ -223,60 +179,66 @@ export default function Dashboard() {
           </div>
           
           <div className="panel-body">
-            <ul className="incident-list">
-              {recentIncidents.map((incident) => (
-                <li key={incident.id} className="incident-item">
-                  <div className="incident-status">
-                    <div className={`priority-indicator priority-${incident.priority}`}></div>
-                  </div>
-                  
-                  <div className="incident-content">
-                    <div className="incident-top">
-                      <span className="incident-id text-accent">ID: {incident.id}</span>
-                      <span className="incident-time">{new Date(incident.created_at).toLocaleTimeString()}</span>
+            {incLoading ? (
+              <div className="p-lg">
+                <Skeleton variant="text" height="40px" className="mb-sm" />
+                <Skeleton variant="text" height="40px" className="mb-sm" />
+                <Skeleton variant="text" height="40px" />
+              </div>
+            ) : (
+              <ul className="incident-list">
+                {allIncidents.slice(0, 5).map((incident) => (
+                  <li key={incident.id} className="incident-item">
+                    <div className="incident-status">
+                      <div className={`priority-indicator priority-${incident.priority}`}></div>
                     </div>
-                    <h4 className="incident-title">{incident.title}</h4>
-                    <div className="incident-bottom">
-                      <span className="badge badge-neutral">Hab. {incident.location}</span>
-                      <span className={`badge badge-${
-                        (incident.status === 'resolved' || incident.status === 'resuelto') ? 'success' : 
-                        (incident.status === 'in-progress' || incident.status === 'proceso') ? 'warning' : 'danger'
-                      }`}>
-                        {(incident.status === 'resolved' || incident.status === 'resuelto') ? 'Resuelta' : 
-                         (incident.status === 'in-progress' || incident.status === 'proceso') ? 'En proceso' : 'Pendiente'}
-                      </span>
+                    
+                    <div className="incident-content">
+                      <div className="incident-top">
+                        <span className="incident-id text-accent">ID: {incident.id}</span>
+                        <span className="incident-time">{new Date(incident.created_at).toLocaleTimeString()}</span>
+                      </div>
+                      <h4 className="incident-title">{incident.title}</h4>
+                      <div className="incident-bottom">
+                        <span className="badge badge-neutral">Hab. {incident.location}</span>
+                        <span className={`badge badge-${
+                          (incident.status === 'resolved' || incident.status === 'resuelto') ? 'success' : 
+                          (incident.status === 'in-progress' || incident.status === 'proceso') ? 'warning' : 'danger'
+                        }`}>
+                          {(incident.status === 'resolved' || incident.status === 'resuelto') ? 'Resuelta' : 
+                           (incident.status === 'in-progress' || incident.status === 'proceso') ? 'En proceso' : 'Pendiente'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </li>
-              ))}
-              {recentIncidents.length === 0 && (
-                <div className="p-xl text-center text-muted">No hay incidencias registradas.</div>
-              )}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
-        {/* ALERTAS DE INVENTARIO CRÍTICO */}
         <div className="glass-card panel">
           <div className="panel-header border-b">
             <h3>Alertas de Inventario</h3>
-            <span className="badge badge-danger">Crítico</span>
           </div>
           <div className="panel-body p-lg">
-            {lowStock.length > 0 ? (
-              <div className="flex flex-col gap-sm">
-                <ul className="incident-list">
-                  {lowStock.map(item => (
-                    <li key={item.id} className="p-sm flex justify-between items-center border-b border-white/5 last:border-0 hover:bg-white/5 cursor-pointer rounded-md" onClick={() => navigate('/inventario')}>
-                      <div>
-                        <div className="font-bold text-sm">{item.nombre}</div>
-                        <div className="text-[10px] text-danger uppercase font-bold">Stock: {item.stock_actual} {item.unidad}</div>
-                      </div>
-                      <ChevronRight size={16} className="text-muted" />
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {stockLoading ? (
+               <div className="flex flex-col gap-sm">
+                 <Skeleton height="30px" />
+                 <Skeleton height="30px" />
+               </div>
+            ) : lowStock.length > 0 ? (
+              <ul className="incident-list">
+                {lowStock.map(item => (
+                  <li key={item.id} className="p-sm flex justify-between items-center border-b border-white/5 last:border-0" onClick={() => navigate('/inventario')}>
+                    <div>
+                      <div className="font-bold text-sm">{item.nombre}</div>
+                      <div className="text-[10px] text-danger font-bold">Stock: {item.stock_actual}</div>
+                    </div>
+                    <ChevronRight size={16} className="text-muted" />
+                  </li>
+                ))}
+              </ul>
             ) : (
               <div className="p-xl text-center text-muted">Stock garantizado.</div>
             )}
@@ -288,7 +250,18 @@ export default function Dashboard() {
             <h3>Tendencia de Consumo</h3>
           </div>
           <div className="panel-body p-lg" style={{ height: '320px' }}>
-            {(() => {
+            {trendsLoading ? (
+               <div className="w-full h-full flex flex-col justify-end gap-sm p-lg">
+                 <div className="flex items-end gap-md h-full">
+                    <Skeleton height="40%" width="12%" />
+                    <Skeleton height="70%" width="12%" />
+                    <Skeleton height="50%" width="12%" />
+                    <Skeleton height="90%" width="12%" />
+                    <Skeleton height="60%" width="12%" />
+                    <Skeleton height="80%" width="12%" />
+                 </div>
+               </div>
+            ) : (() => {
               const typeColors = {
                 luz: { border: '#818cf8', bg: 'rgba(129,140,248,0.1)' },
                 agua: { border: '#2dd4bf', bg: 'rgba(45,212,191,0.1)' },
@@ -296,7 +269,7 @@ export default function Dashboard() {
               }
               const trends: any = readingTrends || {}
               const allDates = [...new Set(Object.values(trends).flat().map((r: any) => r.fecha))].sort()
-              const labels = allDates.map(d => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }))
+              const labels = allDates.map(d => new Date(d as string).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }))
 
               const datasets = Object.entries(typeColors)
                 .filter(([tipo]) => trends[tipo] && trends[tipo].length > 0)
@@ -317,7 +290,7 @@ export default function Dashboard() {
                 }))
 
               if (datasets.length === 0) return (
-                <div className="w-full h-full flex flex-column items-center justify-center text-muted">
+                <div className="w-full h-full flex flex-col items-center justify-center text-muted">
                   <Activity size={32} className="mb-sm opacity-20" />
                   <p className="text-xs">Sin datos de consumo</p>
                 </div>
@@ -384,9 +357,9 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="bg-accent/5 p-md rounded-md border-dashed-accent mb-xl">
+              <div className="bg-accent/5 p-md rounded-md mb-xl">
                 <h4 className="text-xs font-bold text-accent mb-sm uppercase">Resumen del Informe:</h4>
-                <ul className="text-xs text-muted gap-xs flex flex-col">
+                <ul className="text-xs text-muted flex flex-col gap-xs">
                   <li className="flex items-center gap-xs"><Check size={12} className="text-success" /> Consolidado de Incidencias Totales</li>
                   <li className="flex items-center gap-xs"><Check size={12} className="text-success" /> Cálculo de Suministros (m³ / kWh)</li>
                   <li className="flex items-center gap-xs"><Check size={12} className="text-success" /> Registro de Mantenimiento Preventivo</li>
@@ -402,16 +375,11 @@ export default function Dashboard() {
                 disabled={isGenerating}
               >
                 {isGenerating ? (
-                  <>
-                    <RefreshCw size={16} className="animate-spin" />
-                    <span>Procesando...</span>
-                  </>
+                   <RefreshCw size={16} className="animate-spin" />
                 ) : (
-                  <>
-                    <Printer size={16} />
-                    <span>Descargar PDF Pro</span>
-                  </>
+                  <Printer size={16} />
                 )}
+                <span>{isGenerating ? 'Procesando...' : 'Descargar PDF Pro'}</span>
               </button>
             </div>
           </div>
@@ -419,273 +387,40 @@ export default function Dashboard() {
       )}
 
       <style>{`
-        .page-header {
-          display: flex;
-          align-items: flex-end;
-          justify-content: space-between;
-          margin-bottom: var(--spacing-xl);
-          animation: slideInUp 0.3s ease;
-        }
-
-        .page-title {
-          font-size: var(--font-size-2xl);
-          font-weight: 800;
-          letter-spacing: -0.02em;
-        }
-
-        .page-subtitle {
-          color: var(--color-text-secondary);
-          margin-top: var(--spacing-xs);
-        }
-
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-          gap: var(--spacing-lg);
-          animation: slideInUp 0.4s ease;
-        }
-
-        .stat-card {
-          padding: var(--spacing-lg);
-          display: flex;
-          flex-direction: column;
-          gap: var(--spacing-md);
-          position: relative;
-          overflow: hidden;
-        }
-
-        .stat-card::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(circle at top right, var(--color-bg-glass), transparent);
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        .stat-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(99, 102, 241, 0.1);
-        }
-
-        .stat-card:hover::after {
-          opacity: 1;
-        }
-
-        .stat-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-
-        .stat-title {
-          color: var(--color-text-secondary);
-          font-size: var(--font-size-sm);
-          font-weight: 600;
-        }
-
-        .stat-icon-wrapper {
-          width: 40px;
-          height: 40px;
-          border-radius: var(--radius-md);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .bg-danger-light { background: var(--color-danger-light); }
-        .bg-success-light { background: var(--color-success-light); }
-        .bg-info-light { background: var(--color-info-light); }
-        .bg-accent-light { background: var(--color-accent-light); }
+        .dashboard-container { animation: fadeIn 0.5s ease; }
+        .page-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: var(--spacing-xl); }
+        .page-title { font-size: var(--font-size-2xl); font-weight: 800; }
+        .page-subtitle { color: var(--color-text-secondary); }
         
-        .text-danger { color: #ff8a8a; } /* Más brillante para usar sobre fondos oscuros */
-        .text-success { color: #4ade80; }
-        .text-info { color: #2dd4bf; }
-        .text-accent { color: var(--color-accent-hover); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--spacing-lg); }
+        .stat-card { padding: var(--spacing-lg); display: flex; flex-direction: column; gap: var(--spacing-sm); }
+        .stat-header { display: flex; justify-content: space-between; align-items: center; }
+        .stat-title { font-size: var(--font-size-xs); font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; }
+        .stat-icon-wrapper { width: 36px; height: 36px; border-radius: 8px; display: flex; items-center; justify-content: center; }
+        .stat-value { font-size: var(--font-size-2xl); font-weight: 800; color: var(--color-text-primary); }
 
-        .stat-body {
-          display: flex;
-          align-items: baseline;
-          gap: var(--spacing-sm);
-        }
-
-        .stat-value {
-          font-size: var(--font-size-2xl);
-          font-weight: 800;
-          letter-spacing: -0.03em;
-          color: var(--color-text-primary);
-        }
-
-        .stat-change {
-          display: flex;
-          align-items: center;
-          font-size: var(--font-size-xs);
-          font-weight: 700;
-        }
-
-        .rotate-90 { transform: rotate(90deg); }
-
-        .dashboard-grid {
-          display: grid;
-          grid-template-columns: 2fr 1fr;
-          gap: var(--spacing-lg);
-          animation: slideInUp 0.5s ease;
-        }
-
-        .panel-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: var(--spacing-lg);
-        }
-
-        .panel-header h3 {
-          font-size: var(--font-size-md);
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color: var(--color-text-secondary);
-        }
-
-        .panel-body {
-          padding: 0;
-        }
-
-        .align-center {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          height: 100%;
-          min-height: 250px;
-        }
-
-        .incident-list {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .incident-item {
-          display: flex;
-          gap: var(--spacing-md);
-          padding: var(--spacing-md) var(--spacing-lg);
-          border-bottom: 1px solid var(--color-border);
-          transition: background var(--transition-fast);
-          cursor: pointer;
-        }
-
-        .incident-item:hover {
-          background: rgba(255, 255, 255, 0.03);
-          transform: translateX(4px);
-        }
-
-        .incident-item:last-child {
-          border-bottom: none;
-        }
-
-        .incident-status {
-          padding-top: var(--spacing-sm);
-        }
-
-        .priority-indicator {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-        }
-
-        .priority-high { background: var(--color-danger); box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
-        .priority-medium { background: var(--color-warning); }
-        .priority-low { background: var(--color-info); }
-
-        .incident-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: var(--spacing-xs);
-        }
-
-        .incident-top {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-
-        .incident-id {
-          font-size: var(--font-size-xs);
-          font-weight: 700;
-          letter-spacing: 0.05em;
-        }
-
-        .h-48 { height: 12rem; }
-        .gap-xs { gap: var(--spacing-xs); }
-        .rounded-t-sm { border-top-left-radius: 4px; border-top-right-radius: 4px; }
-
-        .incident-time {
-          font-size: var(--font-size-xs);
-          color: var(--color-text-muted);
-        }
-
-        .incident-title {
-          font-size: var(--font-size-md);
-          font-weight: 600;
-        }
-
-        .incident-bottom {
-          display: flex;
-          gap: var(--spacing-sm);
-          margin-top: var(--spacing-xs);
-        }
-
-        .mt-xl { margin-top: var(--spacing-xl); }
+        .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: var(--spacing-lg); }
+        .panel { display: flex; flex-direction: column; }
+        .panel-header { padding: var(--spacing-md) var(--spacing-lg); display: flex; justify-content: space-between; items-center; }
+        .panel-header h3 { font-size: var(--font-size-sm); font-weight: 700; text-transform: uppercase; color: var(--color-text-secondary); }
+        
+        .incident-list { list-style: none; }
+        .incident-item { display: flex; gap: var(--spacing-md); padding: var(--spacing-md) var(--spacing-lg); border-bottom: 1px solid var(--color-border); cursor: pointer; transition: background 0.2s; }
+        .incident-item:hover { background: var(--color-bg-glass); }
+        .priority-indicator { width: 4px; border-radius: 2px; }
+        .priority-critica { background: var(--color-danger); }
+        .priority-alta { background: var(--color-priority-alta); }
+        .priority-media { background: var(--color-warning); }
+        .priority-baja { background: var(--color-success); }
+        
+        .incident-content { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+        .incident-top { display: flex; justify-content: space-between; font-size: var(--font-size-xs); color: var(--color-text-muted); }
+        .incident-title { font-size: var(--font-size-sm); font-weight: 600; }
+        .incident-bottom { display: flex; gap: var(--spacing-sm); margin-top: 4px; }
 
         @media (max-width: 1024px) {
-          .dashboard-grid {
-            grid-template-columns: 1fr;
-          }
-          .stats-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-          }
+          .dashboard-grid { grid-template-columns: 1fr; }
         }
-
-        @media (max-width: 640px) {
-          .stats-grid {
-            grid-template-columns: 1fr !important;
-          }
-        }
-        
-        @media (max-width: 768px) {
-          .stats-grid { grid-template-columns: 1fr !important; }
-        }
-
-        /* Estilos para impresión */
-        @media print {
-          .sidebar, .page-header, .stats-grid, .dashboard-grid, .hide-print {
-            display: none !important;
-          }
-          .modal-overlay {
-            position: static;
-            background: white;
-            padding: 0;
-          }
-          .modal-content {
-            box-shadow: none;
-            width: 100%;
-            max-width: none;
-            background: white;
-            color: black;
-          }
-          .printable-area {
-            color: black !important;
-          }
-          .text-muted { color: #666 !important; }
-          .glass-card { background: white !important; border: 1px solid #eee !important; }
-        }
-
-        .report-modal { max-width: 900px; width: 95%; max-height: 90vh; overflow-y: auto; }
-        .priority-badge { font-size: 0.65rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; }
-        .priority-high { color: #ef4444; border: 1px solid #ef4444; }
-        .priority-medium { color: #f59e0b; border: 1px solid #f59e0b; }
-        .priority-low { color: #3b82f6; border: 1px solid #3b82f6; }
       `}</style>
     </div>
   )

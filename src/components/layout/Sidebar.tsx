@@ -12,12 +12,29 @@ import {
   Calendar,
   Package,
   BarChart3,
-  Building2
+  Building2,
+  Sun,
+  Moon
 } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 
 export default function Sidebar({ isOpen, closeSidebar }) {
   const { signOut, profile, availableHotels } = useAuth()
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark')
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light-theme')
+    } else {
+      document.documentElement.classList.remove('light-theme')
+    }
+    localStorage.setItem('theme', theme)
+  }, [theme])
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark')
+  }
 
   const handleSignOut = async () => {
     await signOut()
@@ -88,10 +105,15 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           </div>
         </div>
         
-        <button onClick={handleSignOut} className="btn btn-ghost w-full mt-sm justify-start">
-          <LogOut size={18} />
-          <span>Cerrar Sesión</span>
-        </button>
+        <div className="flex gap-sm mt-md">
+          <button onClick={toggleTheme} className="btn btn-secondary flex-1 justify-center">
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            <span>{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</span>
+          </button>
+          <button onClick={handleSignOut} className="btn btn-ghost p-sm" title="Cerrar Sesión">
+            <LogOut size={18} />
+          </button>
+        </div>
       </div>
 
       <style>{`
