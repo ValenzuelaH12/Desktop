@@ -152,9 +152,12 @@ export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSav
       await preventivoService.saveAssignments(newTemplate.id, hotelId, assignments);
 
       onSave();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving template:', error);
-      onMessage({ type: 'error', text: 'Error al guardar la plantilla.' });
+      onMessage({ 
+        type: 'error', 
+        text: `Error al guardar: ${error.message || 'Error desconocido'}` 
+      });
     } finally {
       setIsSaving(false);
     }
