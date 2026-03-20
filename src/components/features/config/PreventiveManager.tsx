@@ -149,12 +149,21 @@ export const PreventiveManager = ({ activeHotelId, onMessage, zones, rooms, asse
         ))}
 
         {!loading && templates.length === 0 && (
-          <div className="col-span-full py-xl text-center border-2 border-dashed border-white/10 rounded-2xl text-muted bg-white/5">
-            <LayoutList size={56} className="mx-auto mb-md opacity-10" />
-            <h3 className="font-bold text-white/50">Sin Procedimientos</h3>
-            <p className="text-sm px-xl max-w-sm mx-auto my-sm">Aún no has configurado ninguna rutina preventiva. Crea la primera para empezar con el control operativo.</p>
-            <Button variant="ghost" className="mt-md text-accent" onClick={() => setView('create')}>
-              <Plus size={16} /> Crear Plantilla Inicial
+          <div className="col-span-full py-20 text-center v-glass-card border-2 border-dashed border-white/10 flex flex-col items-center gap-6 group hover:border-accent/30 transition-all duration-700">
+            <div className="relative">
+              <div className="absolute inset-0 bg-accent/20 blur-3xl rounded-full scale-150 animate-pulse" />
+              <div className="relative p-6 bg-white/5 rounded-3xl border border-white/10 shadow-2xl group-hover:scale-110 transition-transform duration-500">
+                <LayoutList size={64} className="text-accent opacity-80" />
+              </div>
+            </div>
+            <div className="space-y-2 max-w-sm">
+              <h3 className="text-2xl font-black text-white uppercase tracking-tight italic">Expandir Operaciones</h3>
+              <p className="text-secondary text-sm leading-relaxed">
+                Diseña tu primer plan de mantenimiento preventivo para automatizar las revisiones técnicas de {zones.length > 0 ? zones[0].nombre : 'tu hotel'}.
+              </p>
+            </div>
+            <Button onClick={() => setView('create')} className="v-button-primary scale-110 shadow-xl shadow-accent/20 px-10">
+              <Plus size={20} className="mr-2" /> Empezar Ahora
             </Button>
           </div>
         )}

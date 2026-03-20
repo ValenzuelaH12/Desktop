@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Users, Hotel, Settings, Package, QrCode, Smartphone, Activity, Calendar, 
   Layers, MapPin, Check, X, Bell, Building2, ShieldCheck
@@ -33,7 +34,22 @@ const TABS = [
 
 export default function Configuracion() {
   const { profile, activeHotelId } = useAuth();
-  const [activeTab, setActiveTab] = useState('usuarios');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'usuarios');
+
+  // Sincronizar pestaña activa con parámetro de URL
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && TABS.some(t => t.id === tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  // Actualizar URL cuando cambie la pestaña manualmente
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+    setSearchParams({ tab: tabId });
+  };
   
   // Tabs dinámicos basados en permisos
   const configTabs = [...TABS];
@@ -116,7 +132,7 @@ export default function Configuracion() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabChange(tab.id)}
                   className={`config-nav-btn ${activeTab === tab.id ? 'active' : ''}`}
                 >
                   <Icon size={18} className={activeTab === tab.id ? 'text-accent' : 'text-muted'} />
