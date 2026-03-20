@@ -11,7 +11,8 @@ import {
   ChevronRight,
   Search,
   Plus,
-  X
+  X,
+  Globe
 } from 'lucide-react'
 import { useSuperAdmin } from '../hooks/useSuperAdmin'
 import { configService } from '../services/configService'
@@ -128,32 +129,59 @@ export default function SuperAdmin() {
   if (isLoading) return <div className="p-xl text-center">Cargando visión global...</div>
 
   return (
-    <div className="p-lg md:p-xl space-y-xl">
+    <div className="p-lg md:p-xl space-y-xl animate-fade-in max-w-[1600px] mx-auto">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-md">
-        <div>
-          <h1 className="text-2xl font-bold">Panel de Control de Cadena</h1>
-          <p className="text-muted text-sm">Gestión masiva de los 8 centros operativos</p>
+        <div className="flex items-center gap-lg">
+          <div className="p-3 bg-accent/20 text-accent rounded-2xl border border-accent/30 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+            <Globe size={32} />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-white uppercase italic">V-<span className="text-accent">Chain</span></h1>
+            <p className="text-muted text-sm font-bold uppercase tracking-widest opacity-60">Centro de Operaciones Global • 8 Hoteles</p>
+          </div>
         </div>
         <div className="flex gap-sm">
-          <button className="btn btn-outline" onClick={generateChainReport}>
-            <Download size={18} />
-            <span>Reporte Consolidado</span>
+          <button className="v-button-secondary py-3 px-6 rounded-2xl flex items-center gap-sm font-black uppercase text-[10px] tracking-widest" onClick={generateChainReport}>
+            <Download size={16} />
+            <span>Exportar Reporte</span>
           </button>
-          <button className="btn btn-primary" onClick={() => setIsConfigModalOpen(true)}>
-            <Settings size={18} />
-            <span>Configuración Global</span>
+          <button className="v-button-primary py-3 px-8 rounded-2xl flex items-center gap-sm font-black uppercase text-[10px] tracking-widest shadow-lg shadow-accent/20" onClick={() => setIsConfigModalOpen(true)}>
+            <Plus size={16} />
+            <span>Configuración Maestra</span>
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-md">
-        <div className="lg:col-span-2 glass-card p-lg">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-lg">
+        {metrics.map((m, i) => {
+          const Icon = m.icon;
+          return (
+            <div key={i} className="v-glass-card group hover:scale-[1.02] transition-all duration-500 overflow-hidden relative">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-accent/10 transition-all" />
+              <div className="p-lg relative">
+                <div className="flex justify-between items-start mb-md">
+                  <div className={`p-3 rounded-2xl bg-white/5 border border-white/10 text-white group-hover:border-accent/30 group-hover:text-accent transition-all`}>
+                    <Icon size={24} />
+                  </div>
+                  <span className="text-[10px] font-black p-1 px-3 bg-white/5 rounded-full text-muted group-hover:text-white transition-all">REAL-TIME</span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs font-bold text-muted uppercase tracking-widest">{m.title}</span>
+                  <div className="text-4xl font-black text-white tracking-tighter">{m.value}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-lg">
+        <div className="lg:col-span-2 v-glass-card p-lg">
           <h3 className="text-sm font-bold mb-md uppercase text-muted tracking-widest">Carga de Trabajo por Hotel</h3>
           <div className="h-64">
             <Line data={chartData} options={{ maintainAspectRatio: false }} />
           </div>
         </div>
-        <div className="glass-card p-lg">
+        <div className="v-glass-card p-lg">
           <h3 className="text-sm font-bold mb-md uppercase text-muted tracking-widest">Alertas de Cadena</h3>
           <div className="space-y-sm">
             {hotelStats.filter(h => h.activeIncidents > 10).map(h => (

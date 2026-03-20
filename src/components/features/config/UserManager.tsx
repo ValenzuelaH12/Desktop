@@ -314,9 +314,9 @@ export const UserManager: React.FC<UserManagerProps> = ({
                 <button 
                   key={module.id} 
                   type="button"
-                  className={`group relative flex flex-col items-center justify-center gap-2 p-4 min-w-[110px] flex-1 rounded-[18px] border transition-all duration-500 overflow-hidden ${
+                  className={`group relative flex flex-col items-center justify-center gap-3 p-4 min-w-[120px] flex-1 rounded-[22px] border transition-all duration-500 overflow-hidden ${
                     isActive 
-                      ? 'bg-accent text-white border-accent shadow-[0_8px_20px_rgba(99,102,241,0.3)] scale-[1.02]' 
+                      ? 'bg-accent text-white border-accent shadow-[0_10px_25px_rgba(99,102,241,0.4)] scale-[1.02]' 
                       : 'bg-white/5 border-white/5 text-muted/60 hover:border-white/20 hover:bg-white/10 hover:text-white'
                   }`}
                   onClick={() => {
@@ -328,13 +328,13 @@ export const UserManager: React.FC<UserManagerProps> = ({
                 >
                   {isActive && <div className="absolute inset-0 bg-gradient-to-tr from-accent/40 via-transparent to-transparent opacity-50 animate-pulse" />}
                   
-                  <div className={`relative p-2 rounded-xl transition-all duration-500 ${isActive ? 'bg-white/20 shadow-inner' : 'bg-black/20 group-hover:scale-110'}`}>
-                    <Icon size={18} strokeWidth={2.5} />
+                  <div className={`relative p-2.5 rounded-xl transition-all duration-500 ${isActive ? 'bg-white/20 shadow-inner' : 'bg-black/20 group-hover:scale-110'}`}>
+                    <Icon size={22} strokeWidth={2.5} />
                   </div>
-                  <span className="relative text-[9px] font-black uppercase tracking-widest">{module.name}</span>
+                  <span className="relative text-[10px] font-black uppercase tracking-widest text-center leading-tight">{module.name}</span>
                   
-                  {isActive && <div className="absolute top-2 right-2 text-white">
-                    <CheckCircle2 size={10} fill="white" className="text-accent" />
+                  {isActive && <div className="absolute top-3 right-3 text-white">
+                    <CheckCircle2 size={12} fill="white" className="text-accent" />
                   </div>}
                 </button>
               );
@@ -426,9 +426,9 @@ export const UserManager: React.FC<UserManagerProps> = ({
                   <button 
                     key={module.id} 
                     type="button"
-                    className={`group relative flex flex-col items-center justify-center gap-2 p-4 min-w-[110px] flex-1 rounded-[18px] border transition-all duration-500 overflow-hidden ${
+                    className={`group relative flex flex-col items-center justify-center gap-3 p-4 min-w-[120px] flex-1 rounded-[22px] border transition-all duration-500 overflow-hidden ${
                       isActive 
-                        ? 'bg-accent text-white border-accent shadow-[0_8px_20px_rgba(99,102,241,0.3)] scale-[1.02]' 
+                        ? 'bg-accent text-white border-accent shadow-[0_10px_25px_rgba(99,102,241,0.4)] scale-[1.02]' 
                         : 'bg-white/5 border-white/5 text-muted/60 hover:border-white/20 hover:bg-white/10 hover:text-white'
                     }`}
                     onClick={() => {
@@ -440,13 +440,13 @@ export const UserManager: React.FC<UserManagerProps> = ({
                   >
                     {isActive && <div className="absolute inset-0 bg-gradient-to-tr from-accent/40 via-transparent to-transparent opacity-50 animate-pulse" />}
                     
-                    <div className={`relative p-2 rounded-xl transition-all duration-500 ${isActive ? 'bg-white/20 shadow-inner' : 'bg-black/20 group-hover:scale-110'}`}>
-                      <Icon size={18} strokeWidth={2.5} />
+                    <div className={`relative p-2.5 rounded-xl transition-all duration-500 ${isActive ? 'bg-white/20 shadow-inner' : 'bg-black/20 group-hover:scale-110'}`}>
+                      <Icon size={22} strokeWidth={2.5} />
                     </div>
-                    <span className="relative text-[9px] font-black uppercase tracking-widest">{module.name}</span>
+                    <span className="relative text-[10px] font-black uppercase tracking-widest text-center leading-tight">{module.name}</span>
                     
-                    {isActive && <div className="absolute top-2 right-2 text-white">
-                      <CheckCircle2 size={10} fill="white" className="text-accent" />
+                    {isActive && <div className="absolute top-3 right-3 text-white">
+                      <CheckCircle2 size={12} fill="white" className="text-accent" />
                     </div>}
                   </button>
                 );

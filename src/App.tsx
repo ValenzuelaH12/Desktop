@@ -86,7 +86,7 @@ function AppRoutes() {
         </ProtectedRoute>
       }>
         <Route index element={<PermissionRoute moduleId="dashboard"><Dashboard /></PermissionRoute>} />
-        <Route path="superadmin" element={<PermissionRoute moduleId="superadmin"><SuperAdmin /></PermissionRoute>} />
+        <Route path="superadmin" element={<PermissionRoute moduleId="cadenas"><SuperAdmin /></PermissionRoute>} />
         <Route path="incidencias" element={<PermissionRoute moduleId="incidencias"><Incidencias /></PermissionRoute>} />
         <Route path="chat" element={<PermissionRoute moduleId="chat"><Chat /></PermissionRoute>} />
         <Route path="controles" element={<Controles />} />
