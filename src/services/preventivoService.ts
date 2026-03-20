@@ -161,12 +161,17 @@ export const preventivoService = {
   // --- MOTOR DE GENERACIÓN (AUTOMATIZACIÓN) ---
 
   async reconcileRevisions(hotelId: string) {
-    const { data: templates } = await supabase
+    const { data: templates, error: tError } = await supabase
       .from('preventivo_plantillas')
       .select('*, preventivo_asignaciones(*)')
       .eq('hotel_id', hotelId);
     
-    if (!templates) return;
+    if (tError) {
+      console.error('Error fetching templates for reconcile:', tError);
+      return;
+    }
+
+    console.log(`Reconciliando ${templates?.length || 0} plantillas para hotel ${hotelId}`);
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -187,7 +192,10 @@ export const preventivoService = {
 
       if (!shouldGenerate) continue;
 
-      for (const asig of (template.preventivo_asignaciones || [])) {
+      const asigs = template.preventivo_asignaciones || [];
+      console.log(`Procesando plantilla "${template.nombre}" con ${asigs.length} asignaciones`);
+
+      for (const asig of asigs) {
         if (!asig.entidad_id) continue;
 
         // Comprobar si ya existe alguna revisión histórica o pendiente
@@ -225,7 +233,7 @@ export const preventivoService = {
             ubicacionNombre = data?.nombre || 'Activo';
           }
 
-          await supabase.from('preventivo_revisiones').insert([{
+          const { error: insError } = await supabase.from('preventivo_revisiones').insert([{
             hotel_id: hotelId,
             plantilla_id: template.id,
             entidad_tipo: asig.entidad_tipo,
@@ -233,6 +241,12 @@ export const preventivoService = {
             ubicacion_nombre: ubicacionNombre,
             estado: 'pendiente'
           }]);
+
+          if (insError) {
+            console.error(`Error creando revisión para ${ubicacionNombre}:`, insError);
+          } else {
+            console.log(`Revisión creada con éxito para ${ubicacionNombre}`);
+          }
         }
       }
     }
