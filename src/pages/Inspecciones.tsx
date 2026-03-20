@@ -21,6 +21,8 @@ export default function Inspecciones() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'habitacion' | 'zona' | 'activo'>('all');
 
+  console.log(`[Inspecciones Render] Hotel: ${activeHotelId}, Revisions: ${revisions.length}`);
+  
   const fetchData = async () => {
     if (!activeHotelId) return;
     setLoading(true);

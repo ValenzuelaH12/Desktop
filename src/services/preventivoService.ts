@@ -86,24 +86,6 @@ export const preventivoService = {
 
   // --- EJECUCIÓN DE REVISIONES ---
 
-  async getPendingRevisions(hotelId: string): Promise<PreventiveRevision[]> {
-    const { data, error } = await supabase
-      .from('preventivo_revisiones')
-      .select(`
-        *,
-        plantilla:plantilla_id (
-          nombre,
-          frecuencia
-        )
-      `)
-      .eq('hotel_id', hotelId)
-      .eq('estado', 'pendiente')
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
-  },
-
   async startRevision(revisionId: string, userId: string) {
     const { error } = await supabase
       .from('preventivo_revisiones')
