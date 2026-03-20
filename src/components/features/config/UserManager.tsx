@@ -306,7 +306,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
             <span className="divider-text">Permisos de Navegación</span>
           </div>
 
-          <div className="flex flex-wrap gap-2 justify-start">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {AVAILABLE_MODULES.map(module => {
               const Icon = module.icon;
               const isActive = newUser.permisos?.includes(module.id);
@@ -418,7 +418,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
               <span className="divider-text">Ajustes de Capacidad</span>
             </div>
 
-            <div className="flex flex-wrap gap-2 justify-start">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {AVAILABLE_MODULES.map(module => {
                 const Icon = module.icon;
                 const isActive = editingUser.permisos?.includes(module.id);
