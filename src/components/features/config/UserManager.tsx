@@ -306,7 +306,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
             <span className="divider-text">Permisos de Navegación</span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div className="flex flex-wrap gap-3 justify-start">
             {AVAILABLE_MODULES.map(module => {
               const Icon = module.icon;
               const isActive = newUser.permisos?.includes(module.id);
@@ -314,7 +314,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
                 <button 
                   key={module.id} 
                   type="button"
-                  className={`group relative flex flex-col items-center justify-center gap-3 p-4 min-w-[120px] flex-1 rounded-[22px] border transition-all duration-500 overflow-hidden ${
+                  className={`group relative flex flex-col items-center justify-center gap-3 p-3 w-[110px] rounded-[22px] border transition-all duration-500 overflow-hidden ${
                     isActive 
                       ? 'bg-accent text-white border-accent shadow-[0_10px_25px_rgba(99,102,241,0.4)] scale-[1.02]' 
                       : 'bg-white/5 border-white/5 text-muted/60 hover:border-white/20 hover:bg-white/10 hover:text-white'
@@ -418,7 +418,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
               <span className="divider-text">Ajustes de Capacidad</span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            <div className="flex flex-wrap gap-3 justify-start">
               {AVAILABLE_MODULES.map(module => {
                 const Icon = module.icon;
                 const isActive = editingUser.permisos?.includes(module.id);
@@ -426,7 +426,7 @@ export const UserManager: React.FC<UserManagerProps> = ({
                   <button 
                     key={module.id} 
                     type="button"
-                    className={`group relative flex flex-col items-center justify-center gap-3 p-4 min-w-[120px] flex-1 rounded-[22px] border transition-all duration-500 overflow-hidden ${
+                    className={`group relative flex flex-col items-center justify-center gap-3 p-3 w-[110px] rounded-[22px] border transition-all duration-500 overflow-hidden ${
                       isActive 
                         ? 'bg-accent text-white border-accent shadow-[0_10px_25px_rgba(99,102,241,0.4)] scale-[1.02]' 
                         : 'bg-white/5 border-white/5 text-muted/60 hover:border-white/20 hover:bg-white/10 hover:text-white'
