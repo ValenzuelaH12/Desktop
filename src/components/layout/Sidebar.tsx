@@ -48,7 +48,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
     { id: 'inspecciones', name: 'Inspecciones', path: '/inspecciones', icon: ClipboardCheck },
     { id: 'inventario', name: 'Inventario', path: '/inventario', icon: Package },
     { id: 'lecturas', name: 'Lecturas', path: '/lecturas', icon: Activity },
-    { id: 'planificacion', name: 'Preventivos', path: '/configuracion?tab=preventivo', icon: Calendar },
+    { id: 'planificacion', name: 'Preventivos', path: '/configuracion?tab=preventivos', icon: Calendar },
     { id: 'chat', name: 'Chat', path: '/chat', icon: MessageSquare },
     { id: 'insights', name: 'V-Insights', path: '/insights', icon: BarChart3 },
     { id: 'cadenas', name: 'Control de Cadena', path: '/superadmin', icon: Building2, hidden: availableHotels.length <= 1 && profile?.rol !== 'super_admin' },

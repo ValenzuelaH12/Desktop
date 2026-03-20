@@ -63,6 +63,7 @@ export const PreventiveManager = ({ activeHotelId, onMessage, zones, rooms, asse
         zones={zones}
         rooms={rooms}
         assets={assets}
+        onMessage={onMessage}
         onRefresh={onRefresh}
         onSave={() => {
           setView('list');

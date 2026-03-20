@@ -51,9 +51,10 @@ interface Props {
   onSave: () => void;
   onCancel: () => void;
   onRefresh: () => void;
+  onMessage: (m: { type: 'success' | 'error', text: string }) => void;
 }
 
-export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSave, onCancel, onRefresh }: Props) => {
+export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSave, onCancel, onRefresh, onMessage }: Props) => {
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [frecuencia, setFrecuencia] = useState<PreventiveFrequency>('semanal');
@@ -126,12 +127,12 @@ export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSav
 
   const handleSave = async () => {
     if (!nombre || categories.length === 0) {
-      alert('Por favor, rellena el nombre y añade al menos una categoría.');
+      onMessage({ type: 'error', text: 'Por favor, rellena el nombre y añade al menos una categoría.' });
       return;
     }
 
     if (selectedTargets.length === 0) {
-      alert('Por favor, selecciona al menos un objetivo (habitación, zona o activo) para este plan.');
+      onMessage({ type: 'error', text: 'Por favor, selecciona al menos un objetivo (habitación, zona o activo) para este plan.' });
       return;
     }
 
@@ -153,7 +154,7 @@ export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSav
       onSave();
     } catch (error) {
       console.error('Error saving template:', error);
-      alert('Error al guardar la plantilla.');
+      onMessage({ type: 'error', text: 'Error al guardar la plantilla.' });
     } finally {
       setIsSaving(false);
     }
@@ -182,7 +183,7 @@ export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSav
       setEntityToDelete(null);
     } catch (error: any) {
       console.error('Error detallado al borrar:', error);
-      alert(`No se pudo borrar: ${error.message || 'Error de conexión o de integridad de datos'}`);
+      onMessage({ type: 'error', text: `No se pudo borrar: ${error.message || 'Error de conexión'}` });
     }
   };
 
@@ -214,7 +215,7 @@ export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSav
       onRefresh();
     } catch (error) {
       console.error('Error in quick add:', error);
-      alert('Error al crear el nuevo elemento.');
+      onMessage({ type: 'error', text: 'Error al crear el nuevo elemento.' });
     } finally {
       setIsQuickAdding(false);
     }
