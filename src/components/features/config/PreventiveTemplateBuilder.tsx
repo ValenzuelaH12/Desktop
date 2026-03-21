@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '../../../lib/supabase';
 import { 
   Plus, 
   Trash2, 
@@ -45,6 +46,7 @@ interface CategoryEntry {
 
 interface Props {
   hotelId: string;
+  initialTemplateId?: string; // Nuevo: ID para modo edición
   zones: any[];
   rooms: any[];
   assets: any[];
@@ -54,7 +56,7 @@ interface Props {
   onMessage: (m: { type: 'success' | 'error', text: string }) => void;
 }
 
-export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSave, onCancel, onRefresh, onMessage }: Props) => {
+export const PreventiveTemplateBuilder = ({ hotelId, initialTemplateId, zones, rooms, assets, onSave, onCancel, onRefresh, onMessage }: Props) => {
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [frecuencia, setFrecuencia] = useState<PreventiveFrequency>('semanal');
@@ -62,6 +64,58 @@ export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSav
   const [selectedTargets, setSelectedTargets] = useState<string[]>([]); // IDS de habs/zonas/activos
   const [categories, setCategories] = useState<CategoryEntry[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(!!initialTemplateId);
+
+  // Carga de datos iniciales en modo EDICIÓN
+  useEffect(() => {
+    if (initialTemplateId) {
+      const loadTemplate = async () => {
+        setIsLoading(true);
+        try {
+          const data = await preventivoService.getTemplateDetail(initialTemplateId);
+          setNombre(data.nombre);
+          setDescripcion(data.descripcion || '');
+          setFrecuencia(data.frecuencia);
+          setTargetType(data.tipo_objetivo);
+          
+          // Cargar categorías e ítems
+          const mappedCats = (data.preventivo_categorias || []).map((cat: any) => ({
+            id: cat.id,
+            nombre: cat.nombre,
+            orden: cat.orden,
+            isExpanded: true,
+            items: (cat.preventivo_items || []).map((item: any) => ({
+              id: item.id,
+              texto: item.texto,
+              tipo_respuesta: item.tipo_respuesta,
+              criticidad: item.criticidad,
+              orden: item.orden
+            }))
+          }));
+          setCategories(mappedCats);
+
+          // Cargar asignaciones (necesitaremos una función para esto en el servicio o usar la relación si existe)
+          // Asumimos que las asignaciones vienen en el detalle o las pedimos aparte
+          const { data: asigs } = await supabase
+            .from('preventivo_asignaciones')
+            .select('entidad_id')
+            .eq('plantilla_id', initialTemplateId);
+          
+          if (asigs) {
+            const uniqueIds = Array.from(new Set(asigs.map(a => a.entidad_id))) as string[];
+            setSelectedTargets(uniqueIds);
+          }
+
+        } catch (error) {
+          console.error('Error loading template for edit:', error);
+          onMessage({ type: 'error', text: 'Error al cargar los datos de la plantilla.' });
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadTemplate();
+    }
+  }, [initialTemplateId]);
 
   // Modales de creación rápida
   const [showQuickAdd, setShowQuickAdd] = useState<'none' | 'zona' | 'habitacion' | 'activo'>('none');
@@ -138,18 +192,38 @@ export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSav
 
     setIsSaving(true);
     try {
-      // 1. Crear plantilla y estructura
-      const newTemplate = await preventivoService.createTemplate(
-        { hotel_id: hotelId, nombre, descripcion, frecuencia, tipo_objetivo: targetType },
-        categories
-      );
+      if (initialTemplateId) {
+        // MODO EDICIÓN
+        await preventivoService.updateTemplate(
+          initialTemplateId,
+          { nombre, descripcion, frecuencia, tipo_objetivo: targetType },
+          categories
+        );
 
-      // 2. Guardar asignaciones
-      const assignments = selectedTargets.map(targetId => ({
-        entidad_tipo: targetType,
-        entidad_id: targetId
-      }));
-      await preventivoService.saveAssignments(newTemplate.id, hotelId, assignments);
+        const uniqueTargets = Array.from(new Set(selectedTargets));
+        const assignments = uniqueTargets.map(targetId => ({
+          entidad_tipo: targetType,
+          entidad_id: targetId
+        }));
+        await preventivoService.saveAssignments(initialTemplateId, hotelId, assignments);
+        
+        onMessage({ type: 'success', text: 'Procedimiento actualizado correctamente' });
+      } else {
+        // MODO CREACIÓN
+        const newTemplate = await preventivoService.createTemplate(
+          { hotel_id: hotelId, nombre, descripcion, frecuencia, tipo_objetivo: targetType },
+          categories
+        );
+
+        const uniqueTargets = Array.from(new Set(selectedTargets));
+        const assignments = uniqueTargets.map(targetId => ({
+          entidad_tipo: targetType,
+          entidad_id: targetId
+        }));
+        await preventivoService.saveAssignments(newTemplate.id, hotelId, assignments);
+        
+        onMessage({ type: 'success', text: 'Procedimiento preventivo creado correctamente' });
+      }
 
       onSave();
     } catch (error: any) {
@@ -224,6 +298,13 @@ export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSav
     }
   };
 
+  if (isLoading) return (
+    <div className="flex flex-col items-center justify-center p-xl h-64">
+      <div className="animate-spin rounded-full h-12 w-12 border-4 border-accent border-t-transparent" />
+      <p className="mt-md text-muted italic">Recuperando configuración...</p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-lg animate-fade-in pb-xl">
       <div className="v-glass-card p-lg flex justify-between items-center sticky top-0 z-10">
@@ -232,7 +313,9 @@ export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSav
             <ShieldCheck size={24} />
           </div>
           <div>
-            <h2 className="text-xl font-bold">Nuevo Procedimiento Preventivo</h2>
+            <h2 className="text-xl font-bold">
+              {initialTemplateId ? 'Editar Procedimiento Preventivo' : 'Nuevo Procedimiento Preventivo'}
+            </h2>
             <p className="text-secondary text-xs">Define el checklist y la frecuencia operativa</p>
           </div>
         </div>
@@ -244,7 +327,7 @@ export const PreventiveTemplateBuilder = ({ hotelId, zones, rooms, assets, onSav
             {isSaving ? (
               <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
             ) : <Save size={18} />}
-            <span>Guardar y Publicar</span>
+            <span>{initialTemplateId ? 'Actualizar Cambios' : 'Guardar y Publicar'}</span>
           </Button>
         </div>
       </div>

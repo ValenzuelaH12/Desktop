@@ -141,66 +141,75 @@ export const preventivoService = {
   },
 
   // --- MOTOR DE GENERACIÓN (AUTOMATIZACIÓN) ---
+  
+  _isReconciling: false,
 
   async reconcileRevisions(hotelId: string) {
-    const { data: templates, error: tError } = await supabase
-      .from('preventivo_plantillas')
-      .select('*, preventivo_asignaciones(*)')
-      .eq('hotel_id', hotelId);
-    
-    if (tError) {
-      console.error('Error fetching templates for reconcile:', tError);
-      return;
-    }
+    if ((this as any)._isReconciling) return;
+    (this as any)._isReconciling = true;
 
-    console.log(`Reconciliando ${templates?.length || 0} plantillas para hotel ${hotelId}`);
-    console.log('Datos de plantillas recuperados:', templates);
+    try {
+      // 1. Obtener todas las plantillas y sus asignaciones
+      const { data: templates, error: tError } = await supabase
+        .from('preventivo_plantillas')
+        .select('*, preventivo_asignaciones(*)')
+        .eq('hotel_id', hotelId);
+      
+      if (tError) throw tError;
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayISO = todayStart.toISOString();
+      // 2. Obtener TODAS las revisiones de HOY para este hotel
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayISO = todayStart.toISOString();
 
-    for (const template of (templates || [])) {
-      try {
+      const { data: allRevisions, error: rError } = await supabase
+        .from('preventivo_revisiones')
+        .select('plantilla_id, entidad_id, created_at')
+        .eq('hotel_id', hotelId);
+      
+      if (rError) throw rError;
+
+      // Sets para búsqueda rápida
+      const existingTodaySet = new Set();
+      const existingHistorySet = new Set();
+
+      (allRevisions || []).forEach(r => {
+        const key = `${r.plantilla_id}-${r.entidad_id}`;
+        existingHistorySet.add(key);
+        if (r.created_at >= todayISO) {
+          existingTodaySet.add(key);
+        }
+      });
+
+      const now = new Date();
+      const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay();
+      const dayOfMonth = now.getDate();
+      const month = now.getMonth();
+
+      const revisionsToInsert: any[] = [];
+
+      for (const template of (templates || [])) {
         if (template.frecuencia === 'checkout' || template.frecuencia === 'evento') continue;
 
-        const now = new Date();
-        let shouldGenerate = false;
-
-        if (template.frecuencia === 'diaria') shouldGenerate = true;
-        else if (template.frecuencia === 'semanal' && now.getDay() === 1) shouldGenerate = true;
-        else if (template.frecuencia === 'mensual' && now.getDate() === 1) shouldGenerate = true;
-        else if (template.frecuencia === 'trimestral' && now.getDate() === 1 && (now.getMonth() % 3 === 0)) shouldGenerate = true;
-        else if (template.frecuencia === 'anual' && now.getDate() === 1 && now.getMonth() === 0) shouldGenerate = true;
+        let isCronDue = false;
+        if (template.frecuencia === 'diaria') isCronDue = true;
+        else if (template.frecuencia === 'semanal' && dayOfWeek === 1) isCronDue = true;
+        else if (template.frecuencia === 'mensual' && dayOfMonth === 1) isCronDue = true;
+        else if (template.frecuencia === 'trimestral' && dayOfMonth === 1 && (month % 3 === 0)) isCronDue = true;
+        else if (template.frecuencia === 'anual' && dayOfMonth === 1 && month === 0) isCronDue = true;
 
         const asigs = template.preventivo_asignaciones || [];
-        console.log(`[Reconcile] Procesando "${template.nombre}" (${template.id}). Asignaciones: ${asigs.length}. Toca hoy: ${shouldGenerate}`);
 
         for (const asig of asigs) {
-          if (!asig.entidad_id) continue;
+          const key = `${template.id}-${asig.entidad_id}`;
+          
+          // Si ya existe hoy, saltar siempre
+          if (existingTodaySet.has(key)) continue;
 
-          // Comprobar si ya existe alguna revisión histórica o pendiente
-          const { data: history } = await supabase
-            .from('preventivo_revisiones')
-            .select('id')
-            .eq('plantilla_id', template.id)
-            .eq('entidad_id', asig.entidad_id)
-            .limit(1);
+          // Generar si toca por cron O si es una asignación virgen (sin ninguna revisión previa)
+          const isNewAssignment = !existingHistorySet.has(key);
 
-          const isNewAssignment = !history || history.length === 0;
-
-          if (!isNewAssignment && !shouldGenerate) continue;
-
-          // Comprobar si ya existe una para HOY
-          const { data: existingToday } = await supabase
-            .from('preventivo_revisiones')
-            .select('id')
-            .eq('plantilla_id', template.id)
-            .eq('entidad_id', asig.entidad_id)
-            .gte('created_at', todayISO)
-            .maybeSingle();
-
-          if (!existingToday) {
+          if (isCronDue || isNewAssignment) {
             let ubicacionNombre = 'Ubicación';
             if (asig.entidad_tipo === 'habitacion') {
               const { data } = await supabase.from('habitaciones').select('nombre').eq('id', asig.entidad_id).single();
@@ -213,32 +222,37 @@ export const preventivoService = {
               ubicacionNombre = data?.nombre || 'Activo';
             }
 
-            const { error: insError } = await supabase.from('preventivo_revisiones').insert([{
+            revisionsToInsert.push({
               hotel_id: hotelId,
               plantilla_id: template.id,
               entidad_tipo: asig.entidad_tipo,
               entidad_id: asig.entidad_id,
               ubicacion_nombre: ubicacionNombre,
               estado: 'pendiente'
-            }]);
+            });
 
-            if (insError) {
-              console.error(`Error creando revisión para ${ubicacionNombre}:`, insError);
-            } else {
-              console.log(`Revisión creada con éxito para ${ubicacionNombre}`);
-            }
+            // IMPORTANTE: Registrar que ya hemos planificado esta revisión para hoy
+            // para evitar duplicados si hay asignaciones redundantes en la misma plantilla
+            existingTodaySet.add(key);
           }
         }
-      } catch (err) {
-        console.error(`Error procesando plantilla "${template?.nombre}":`, err);
       }
+
+      if (revisionsToInsert.length > 0) {
+        const { error: insError } = await supabase
+          .from('preventivo_revisiones')
+          .insert(revisionsToInsert);
+        if (insError) throw insError;
+      }
+
+    } catch (err) {
+      console.error('CRITICAL: Error in reconcileRevisions:', err);
+    } finally {
+      (this as any)._isReconciling = false;
     }
   },
 
-  // --- EJECUCIÓN DE REVISIONES ---
-
   async getPendingRevisions(hotelId: string): Promise<PreventiveRevision[]> {
-    console.log(`Buscando revisiones pendientes para hotel: ${hotelId}`);
     const { data, error } = await supabase
       .from('preventivo_revisiones')
       .select(`
@@ -252,11 +266,208 @@ export const preventivoService = {
       .eq('estado', 'pendiente')
       .order('created_at', { ascending: false });
     
-    if (error) {
-      console.error('Error fetching pending revisions:', error);
-      throw error;
-    }
-    console.log(`Se han encontrado ${data?.length || 0} revisiones pendientes`);
+    if (error) throw error;
     return data || [];
+  },
+
+  async getRecentRevisions(hotelId: string): Promise<PreventiveRevision[]> {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { data, error } = await supabase
+      .from('preventivo_revisiones')
+      .select(`
+        *,
+        plantilla:plantilla_id (
+          nombre,
+          frecuencia
+        )
+      `)
+      .eq('hotel_id', hotelId)
+      .neq('estado', 'pendiente')
+      .gte('created_at', todayStart.toISOString())
+      .order('completado_el', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getAllCompletedRevisions(hotelId: string): Promise<PreventiveRevision[]> {
+    const { data, error } = await supabase
+      .from('preventivo_revisiones')
+      .select(`
+        *,
+        plantilla:plantilla_id (
+          nombre,
+          frecuencia
+        ),
+        ejecutor:ejecutado_por (
+          nombre
+        )
+      `)
+      .eq('hotel_id', hotelId)
+      .neq('estado', 'pendiente')
+      .order('completado_el', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getGroupedHistory(hotelId: string) {
+    const revisions = await this.getAllCompletedRevisions(hotelId);
+    const groups: Record<string, any> = {};
+
+    revisions.forEach(rev => {
+      // Usar la fecha local de creacion para agrupar (identidad del ciclo)
+      const dateKey = new Date(rev.created_at).toLocaleDateString();
+      const planKey = rev.plantilla_id;
+      const groupKey = `${planKey}_${dateKey}`;
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = {
+          id: groupKey,
+          plantilla_id: rev.plantilla_id,
+          plantilla_nombre: rev.plantilla?.nombre || 'Plan Eliminado',
+          fecha_ciclo: rev.created_at,
+          ultima_fecha_completado: rev.completado_el,
+          total_tareas: 0,
+          tareas_ok: 0,
+          tareas_fallidas: 0,
+          revision_ids: [],
+          ejecutores: new Set()
+        };
+      }
+
+      const group = groups[groupKey];
+      group.total_tareas++;
+      if (rev.estado === 'fallida') group.tareas_fallidas++;
+      else group.tareas_ok++;
+      
+      group.revision_ids.push(rev.id);
+      if (rev.ejecutor?.nombre) group.ejecutores.add(rev.ejecutor.nombre);
+      
+      if (new Date(rev.completado_el) > new Date(group.ultima_fecha_completado)) {
+        group.ultima_fecha_completado = rev.completado_el;
+      }
+    });
+
+    return Object.values(groups).sort((a, b) => 
+      new Date(b.ultima_fecha_completado).getTime() - new Date(a.ultima_fecha_completado).getTime()
+    );
+  },
+
+  async getRevisionBulkFullDetail(revisionIds: string[]) {
+    if (!revisionIds || revisionIds.length === 0) return [];
+    
+    const { data: revisions, error } = await supabase
+      .from('preventivo_revisiones')
+      .select(`
+        *,
+        plantilla:plantilla_id (
+          nombre,
+          frecuencia,
+          preventivo_categorias (
+            *,
+            preventivo_items (
+              *
+            )
+          )
+        ),
+        resultados:preventivo_resultados (
+          *
+        ),
+        ejecutor:ejecutado_por (
+          nombre
+        )
+      `)
+      .in('id', revisionIds);
+    
+    if (error) throw error;
+    return revisions;
+  },
+
+
+  async getRevisionFullDetail(revisionId: string) {
+    const { data: revision, error: rError } = await supabase
+      .from('preventivo_revisiones')
+      .select(`
+        *,
+        plantilla:plantilla_id (
+          nombre,
+          frecuencia,
+          preventivo_categorias (
+            *,
+            preventivo_items (
+              *
+            )
+          )
+        ),
+        resultados:preventivo_resultados (
+          *
+        ),
+        ejecutor:ejecutado_por (
+          nombre
+        )
+      `)
+      .eq('id', revisionId)
+      .single();
+    
+    if (rError) throw rError;
+    return revision;
+  },
+
+  async deleteTemplate(templateId: string) {
+    const { error } = await supabase
+      .from('preventivo_plantillas')
+      .delete()
+      .eq('id', templateId);
+    
+    if (error) throw error;
+  },
+
+  async updateTemplate(templateId: string, template: Partial<PreventiveTemplate>, categories: any[]) {
+    const { error: tError } = await supabase
+      .from('preventivo_plantillas')
+      .update(template)
+      .eq('id', templateId);
+    
+    if (tError) throw tError;
+
+    const { error: dError } = await supabase
+      .from('preventivo_categorias')
+      .delete()
+      .eq('plantilla_id', templateId);
+    
+    if (dError) throw dError;
+
+    for (const cat of categories) {
+      const { data: newCat, error: cError } = await supabase
+        .from('preventivo_categorias')
+        .insert([{ 
+          plantilla_id: templateId, 
+          nombre: cat.nombre, 
+          orden: cat.orden 
+        }])
+        .select()
+        .single();
+      
+      if (cError) throw cError;
+
+      if (cat.items && cat.items.length > 0) {
+        const itemsToInsert = cat.items.map((item: any) => ({
+          categoria_id: newCat.id,
+          texto: item.texto,
+          tipo_respuesta: item.tipo_respuesta,
+          criticidad: item.criticidad,
+          orden: item.orden
+        }));
+
+        const { error: iError } = await supabase
+          .from('preventivo_items')
+          .insert(itemsToInsert);
+        
+        if (iError) throw iError;
+      }
+    }
   },
 };

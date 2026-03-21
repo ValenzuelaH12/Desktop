@@ -16,7 +16,8 @@ import {
   Sun,
   Moon,
   ShieldCheck,
-  ClipboardCheck
+  ClipboardCheck,
+  CalendarDays
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
@@ -46,6 +47,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
     { id: 'dashboard', name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { id: 'incidencias', name: 'Incidencias', path: '/incidencias', icon: AlertTriangle },
     { id: 'inspecciones', name: 'Inspecciones', path: '/inspecciones', icon: ClipboardCheck },
+    { id: 'calendario', name: 'Calendario', path: '/calendario', icon: CalendarDays },
     { id: 'inventario', name: 'Inventario', path: '/inventario', icon: Package },
     { id: 'lecturas', name: 'Lecturas', path: '/lecturas', icon: Activity },
     { id: 'planificacion', name: 'Preventivos', path: '/configuracion?tab=preventivos', icon: Calendar },

@@ -12,6 +12,7 @@ import Configuracion from './pages/Configuracion'
 import Lecturas from './pages/Lecturas'
 import Inventory from './pages/Inventory'
 import Inspecciones from './pages/Inspecciones'
+import Calendario from './pages/Calendario'
 import VInsights from './pages/VInsights'
 import GuestPortal from './pages/GuestPortal'
 import AssetDetail from './pages/AssetDetail'
@@ -94,11 +95,9 @@ function AppRoutes() {
         <Route path="lecturas" element={<PermissionRoute moduleId="lecturas"><Lecturas /></PermissionRoute>} />
         <Route path="inventario" element={<PermissionRoute moduleId="inventario"><Inventory /></PermissionRoute>} />
         <Route path="inspecciones" element={<PermissionRoute moduleId="inspecciones"><Inspecciones /></PermissionRoute>} />
+        <Route path="calendario" element={<PermissionRoute moduleId="inspecciones"><Calendario /></PermissionRoute>} />
         <Route path="insights" element={<PermissionRoute moduleId="insights"><VInsights /></PermissionRoute>} />
         <Route path="asset/:id" element={<AssetDetail />} />
-        {/* Futuras rutas:
-        <Route path="incidencias/:id" element={<IncidenciaDetalle />} />
-        */}
       </Route>
       
       <Route path="*" element={<Navigate to="/" />} />

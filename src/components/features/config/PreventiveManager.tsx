@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Card } from '../../ui/Card';
 import { Button } from '../../ui/Button';
+import { Modal } from '../../ui/Modal';
 import { PreventiveTemplate } from '../../../types';
 import { preventivoService } from '../../../services/preventivoService';
 import { PreventiveTemplateBuilder } from './PreventiveTemplateBuilder';
@@ -29,6 +30,8 @@ export const PreventiveManager = ({ activeHotelId, onMessage, zones, rooms, asse
   const [templates, setTemplates] = useState<PreventiveTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'list' | 'create' | 'edit'>('list');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [templateToDelete, setTemplateToDelete] = useState<PreventiveTemplate | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const fetchTemplates = async () => {
@@ -44,6 +47,19 @@ export const PreventiveManager = ({ activeHotelId, onMessage, zones, rooms, asse
     }
   };
 
+  const handleDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+    try {
+      await preventivoService.deleteTemplate(templateToDelete.id);
+      onMessage({ type: 'success', text: 'Procedimiento eliminado correctamente' });
+      fetchTemplates();
+      setTemplateToDelete(null);
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      onMessage({ type: 'error', text: 'No se pudo eliminar el procedimiento' });
+    }
+  };
+
   useEffect(() => {
     fetchTemplates();
   }, [activeHotelId]);
@@ -56,10 +72,11 @@ export const PreventiveManager = ({ activeHotelId, onMessage, zones, rooms, asse
     </div>
   );
 
-  if (view === 'create') {
+  if (view === 'create' || view === 'edit') {
     return (
       <PreventiveTemplateBuilder 
         hotelId={activeHotelId}
+        initialTemplateId={selectedTemplateId || undefined}
         zones={zones}
         rooms={rooms}
         assets={assets}
@@ -67,10 +84,13 @@ export const PreventiveManager = ({ activeHotelId, onMessage, zones, rooms, asse
         onRefresh={onRefresh}
         onSave={() => {
           setView('list');
+          setSelectedTemplateId(null);
           fetchTemplates();
-          onMessage({ type: 'success', text: 'Procedimiento preventivo creado correctamente' });
         }}
-        onCancel={() => setView('list')}
+        onCancel={() => {
+          setView('list');
+          setSelectedTemplateId(null);
+        }}
       />
     );
   }
@@ -141,8 +161,21 @@ export const PreventiveManager = ({ activeHotelId, onMessage, zones, rooms, asse
                     <span className="text-[10px] text-muted font-bold uppercase tracking-widest">{template.tipo_objetivo}</span>
                  </div>
                  <div className="flex gap-sm">
-                    <button className="p-sm rounded-lg hover:bg-white/5 text-muted hover:text-white transition-all"><Edit3 size={15} /></button>
-                    <button className="p-sm rounded-lg hover:bg-danger/10 text-muted hover:text-danger transition-all"><Trash2 size={15} /></button>
+                    <button 
+                      onClick={() => {
+                        setSelectedTemplateId(template.id);
+                        setView('edit');
+                      }}
+                      className="p-sm rounded-lg hover:bg-white/5 text-muted hover:text-white transition-all"
+                    >
+                      <Edit3 size={15} />
+                    </button>
+                    <button 
+                      onClick={() => setTemplateToDelete(template)}
+                      className="p-sm rounded-lg hover:bg-danger/10 text-muted hover:text-danger transition-all"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                  </div>
               </div>
             </div>
@@ -169,6 +202,26 @@ export const PreventiveManager = ({ activeHotelId, onMessage, zones, rooms, asse
           </div>
         )}
       </div>
+
+      <Modal
+        isOpen={!!templateToDelete}
+        onClose={() => setTemplateToDelete(null)}
+        title="Eliminar Procedimiento"
+      >
+        <div className="space-y-md text-center py-md">
+          <div className="w-16 h-16 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-md border border-rose-500/20">
+            <Trash2 size={32} />
+          </div>
+          <p className="text-white font-bold text-lg">¿Eliminar este plan?</p>
+          <p className="text-muted text-sm px-lg">
+            Estás a punto de borrar <span className="text-white font-black">"{templateToDelete?.nombre}"</span>. Las inspecciones pendientes vinculadas a este plan también serán eliminadas.
+          </p>
+          <div className="flex gap-md pt-lg">
+             <Button variant="ghost" className="flex-1" onClick={() => setTemplateToDelete(null)}>Cancelar</Button>
+             <Button className="flex-1 bg-rose-600 hover:bg-rose-700" onClick={handleDeleteTemplate}>Eliminar Ahora</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

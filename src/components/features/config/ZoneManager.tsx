@@ -25,6 +25,8 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({
   const [newZone, setNewZone] = useState({ nombre: '', hotel_id: activeHotelId || '' });
   const [newRoom, setNewRoom] = useState({ nombre: '', zona_id: '', hotel_id: activeHotelId || '' });
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{table: string, id: string, name: string} | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Sync hotel_id when activeHotelId changes
   useEffect(() => {
@@ -60,14 +62,22 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({
     }
   };
 
-  const handleDelete = async (table: string, id: string, name: string) => {
-    if (!confirm(`¿Estás seguro de eliminar ${name}?`)) return;
+  const handleDeleteClick = (table: string, id: string, name: string) => {
+    setItemToDelete({ table, id, name });
+  };
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
     try {
-      await configService.delete(table, id);
-      onMessage({ type: 'success', text: `${name} eliminado correctamente.` });
+      await configService.delete(itemToDelete.table, itemToDelete.id);
+      onMessage({ type: 'success', text: `${itemToDelete.name} eliminado correctamente.` });
       onRefresh();
+      setItemToDelete(null);
     } catch (error: any) {
       onMessage({ type: 'error', text: `Error al eliminar: ${error.message}` });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -130,7 +140,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({
                     <DoorOpen size={14} />
                     <span>{zonHabs.length}</span>
                   </div>
-                  <button onClick={() => handleDelete('zonas', z.id, z.nombre)} className="zona-delete-btn">
+                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteClick('zonas', z.id, z.nombre); }} className="zona-delete-btn">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -146,14 +156,15 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({
                     <div key={h.id} className="zona-hab-chip group">
                       <span>{h.nombre}</span>
                       <button 
+                        type="button"
                         className="zona-hab-delete opacity-0 group-hover:opacity-100"
-                        onClick={() => handleDelete('habitaciones', h.id, `Habitación ${h.nombre}`)}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteClick('habitaciones', h.id, `Habitación ${h.nombre}`); }}
                       >
                         <X size={12} />
                       </button>
                     </div>
                   ))}
-                  <button className="zona-hab-add" style={{ borderColor: `${accent}40`, color: accent }} onClick={() => { setSelectedZone(z); setNewRoom({...newRoom, zona_id: z.id}); setIsAddingRoom(true); }}>
+                  <button type="button" className="zona-hab-add" style={{ borderColor: `${accent}40`, color: accent }} onClick={() => { setSelectedZone(z); setNewRoom({...newRoom, zona_id: z.id}); setIsAddingRoom(true); }}>
                     <Plus size={14} /> <span>Añadir</span>
                   </button>
                 </div>
@@ -202,6 +213,24 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({
         </form>
       </Modal>
 
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={!!itemToDelete} onClose={() => !isDeleting && setItemToDelete(null)} title="Confirmar Eliminación">
+        <div className="p-4">
+          <p className="text-gray-300 mb-6">
+            ¿Estás seguro de que deseas eliminar <strong>{itemToDelete?.name}</strong>?<br/>
+            <span className="text-sm text-gray-500 mt-2 block">Esta acción no se puede deshacer.</span>
+          </p>
+          <div className="flex justify-end gap-3 modal-footer border-t-0 p-0">
+            <Button variant="ghost" onClick={() => setItemToDelete(null)} disabled={isDeleting}>
+              Cancelar
+            </Button>
+            <Button variant="danger" onClick={confirmDelete} disabled={isDeleting} icon={Trash2}>
+              {isDeleting ? 'Eliminando...' : 'Eliminar'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <style>{`
         .zonas-redesign { display: flex; flex-direction: column; gap: var(--spacing-lg); }
         .zonas-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; }
@@ -223,15 +252,15 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({
         .zona-card-date { display: flex; align-items: center; gap: 4px; font-size: 0.65rem; color: var(--color-text-muted); }
         .zona-card-actions { display: flex; align-items: center; gap: 0.5rem; }
         .zona-counter { display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
-        .zona-delete-btn { width: 30px; height: 30px; border-radius: 8px; background: rgba(239,68,68,0.08); color: rgba(239,68,68,0.5); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .zona-delete-btn { position: relative; z-index: 20; width: 30px; height: 30px; border-radius: 8px; background: rgba(239,68,68,0.08); color: rgba(239,68,68,0.5); display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto; }
         .zona-delete-btn:hover { background: rgba(239,68,68,0.2); color: #ef4444; }
         .zona-habs-section { padding: 1rem 1.25rem 1.25rem; }
         .zona-habs-label { display: flex; align-items: center; gap: 5px; font-size: 0.65rem; font-weight: 700; color: var(--color-text-muted); margin-bottom: 0.65rem; }
         .zona-habs-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-        .zona-hab-chip { display: flex; align-items: center; gap: 5px; padding: 5px 8px 5px 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; font-size: 0.78rem; font-weight: 500; }
-        .zona-hab-delete { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(255,255,255,0.25); }
+        .zona-hab-chip { position: relative; display: flex; align-items: center; gap: 5px; padding: 5px 8px 5px 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; font-size: 0.78rem; font-weight: 500; cursor: default; }
+        .zona-hab-delete { position: relative; z-index: 20; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(255,255,255,0.25); pointer-events: auto; }
         .zona-hab-delete:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
-        .zona-hab-add { display: flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 8px; border: 1.5px dashed; background: transparent; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+        .zona-hab-add { display: flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 8px; border: 1.5px dashed; background: transparent; font-size: 0.75rem; font-weight: 600; cursor: pointer; pointer-events: auto; }
       `}</style>
     </div>
   );
