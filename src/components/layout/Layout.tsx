@@ -26,7 +26,7 @@ export default function Layout() {
   }, [profile])
 
   return (
-    <div className="app-layout text-primary bg-primary">
+    <div className={`app-layout ${isSidebarOpen ? 'sidebar-open' : ''} text-primary bg-primary`}>
       <div className="bg-animated"></div>
       
       <Sidebar isOpen={isSidebarOpen} closeSidebar={closeSidebar} />
@@ -41,14 +41,17 @@ export default function Layout() {
       <MobileNav />
       <QuickActions />
 
-      {isSidebarOpen && (
-        <div className="sidebar-overlay mobile-only" onClick={closeSidebar}></div>
-      )}
+      {/* Overlay para cerrar sidebar en móvil */}
+      <div 
+        className={`sidebar-overlay ${isSidebarOpen ? 'active' : ''}`} 
+        onClick={closeSidebar}
+      ></div>
 
       <style>{`
         .app-layout {
           display: flex;
           min-height: 100vh;
+          overflow-x: hidden;
         }
 
         .main-wrapper {
@@ -57,14 +60,13 @@ export default function Layout() {
           flex-direction: column;
           margin-left: var(--sidebar-width);
           min-height: 100vh;
-          position: relative;
+          width: 100%;
+          transition: margin-left 0.4s ease;
         }
 
         .main-content {
           flex: 1;
-          padding: calc(var(--header-height) + var(--spacing-xl)) var(--spacing-xl) var(--spacing-xl);
-          max-width: 1400px;
-          margin: 0 auto;
+          padding: calc(var(--header-height) + var(--spacing-xl)) var(--spacing-xl);
           width: 100%;
         }
 
@@ -73,26 +75,7 @@ export default function Layout() {
             margin-left: 0;
           }
           .main-content {
-            padding: calc(var(--header-height) + var(--spacing-md)) var(--spacing-md) calc(var(--spacing-md) + 80px);
-          }
-        }
-
-        .sidebar-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.4);
-          backdrop-filter: blur(4px);
-          z-index: 95;
-          animation: fadeIn 0.3s ease;
-        }
-
-        .mobile-only {
-          display: none;
-        }
-
-        @media (max-width: 768px) {
-          .mobile-only {
-            display: block;
+            padding: calc(var(--header-height) + var(--spacing-md)) var(--spacing-md) 100px;
           }
         }
       `}</style>

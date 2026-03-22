@@ -67,7 +67,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
   });
 
   return (
-    <aside className="sidebar glass border-r">
+    <aside className={`sidebar glass border-r ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-header border-b">
         <div className="flex items-center gap-sm flex-1">
           <Hotel className="text-accent" size={28} />
