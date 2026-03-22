@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Plus } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { aiService, AIAnalysisResult } from '../services/aiService'
 import { IncidentKanban } from '../components/features/inspections/IncidentKanban'
 import { supabase } from '../lib/supabase'
@@ -82,19 +83,31 @@ export default function Incidencias() {
     if (!data.title || !data.location || !user || !activeHotelId) return
     const finalLocation = data.room ? `${data.location} - Hab. ${data.room}` : data.location
 
+    const payload = {
+      title: data.title,
+      location: finalLocation,
+      priority: data.priority as any,
+      status: 'pendiente' as any,
+      descripcion: data.descripcion || '',
+      media_urls: data.media_urls || [],
+      reporter_id: user.id,
+      activo_id: data.activo_id,
+      hotel_id: activeHotelId,
+      created_at: new Date().toISOString()
+    }
+
+    // Comprobar conexión
+    if (!navigator.onLine) {
+      const offlineQueue = JSON.parse(localStorage.getItem('incident_offline_queue') || '[]')
+      localStorage.setItem('incident_offline_queue', JSON.stringify([...offlineQueue, payload]))
+      setIsModalOpen(false)
+      setInitialIncidentData({})
+      toast.warning('Sin conexión. La incidencia se enviará automáticamente al recuperar red. 📴')
+      return
+    }
+
     try {
-      await createIncident.mutateAsync({
-        title: data.title,
-        location: finalLocation,
-        priority: data.priority as any,
-        status: 'pendiente' as any,
-        descripcion: data.descripcion || '',
-        media_urls: data.media_urls || [],
-        reporter_id: user.id,
-        activo_id: data.activo_id,
-        hotel_id: activeHotelId,
-        created_at: new Date().toISOString()
-      })
+      await createIncident.mutateAsync(payload)
       setIsModalOpen(false)
       setInitialIncidentData({})
       toast.success('Incidencia creada correctamente')
@@ -102,6 +115,31 @@ export default function Incidencias() {
       toast.error('Error al crear incidencia')
     }
   }
+
+  // Sincronización automática al volver online
+  useEffect(() => {
+    const handleOnline = async () => {
+      const offlineQueue = JSON.parse(localStorage.getItem('incident_offline_queue') || '[]')
+      if (offlineQueue.length === 0) return
+
+      toast.info(`Sincronizando ${offlineQueue.length} incidencias pendientes... 🔄`)
+      
+      for (const payload of offlineQueue) {
+        try {
+          await createIncident.mutateAsync(payload)
+        } catch (e) {
+          console.error('Error syncing offline incident:', e)
+        }
+      }
+
+      localStorage.removeItem('incident_offline_queue')
+      toast.success('Sincronización completada ✅')
+      refetchIncidents()
+    }
+
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [createIncident, refetchIncidents])
 
   const formattedIncidents = useMemo(() => {
     return incidents.map(inc => ({
@@ -171,8 +209,28 @@ export default function Incidencias() {
     }
   }
 
+  const { isRefreshing, pullDistance } = usePullToRefresh(async () => {
+    await refetchIncidents()
+    toast.success('Incidencias actualizadas')
+  })
+
   return (
     <div className="incidencias-page">
+      {/* Pull to Refresh Indicator */}
+      <div 
+        className="pull-to-refresh-indicator"
+        style={{ 
+          height: `${pullDistance}px`,
+          opacity: pullDistance / 80,
+          transform: `translateY(${isRefreshing ? 0 : -20}px)`
+        }}
+      >
+        <RefreshCw size={20} className={isRefreshing ? 'animate-spin text-accent' : 'text-muted'} />
+        <span className="text-xs font-bold uppercase tracking-widest text-muted ml-sm">
+          {isRefreshing ? 'Actualizando...' : 'Desliza para refrescar'}
+        </span>
+      </div>
+
       <div className="page-header">
         <div>
           <h1 className="page-title">Gestión de Incidencias</h1>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Plus, RefreshCw } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import { compressImage } from '../../../utils/imageUtils'
 
 export function CreateIncidentModal({ 
   isOpen, 
@@ -41,10 +42,13 @@ export function CreateIncidentModal({
 
   const handleModalFileUpload = async (e: any) => {
     if (!e.target.files || e.target.files.length === 0) return
-    const file = e.target.files[0]
+    const originalFile = e.target.files[0]
     setUploading(true)
 
     try {
+      // Comprimir imagen si aplica
+      const file = await compressImage(originalFile);
+      
       const fileExt = file.name.split('.').pop()
       const fileName = `new_${Math.random().toString(36).substring(2)}.${fileExt}`
       const filePath = `incidents/${fileName}`
