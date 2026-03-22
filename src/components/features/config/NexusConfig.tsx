@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Smartphone, Plus, DoorOpen, MapPin, QrCode, RefreshCw, BookOpen } from 'lucide-react';
+import { Smartphone, Plus, DoorOpen, MapPin, QrCode, RefreshCw, BookOpen, Bell, Share2, Copy } from 'lucide-react';
 import { Room, Zone } from '../../../types';
 import { Card } from '../../ui/Card';
+import { useNotifications } from '../../../context/NotificationContext';
+import { useToast } from '../../Toast';
 
 interface NexusConfigProps {
   rooms: Room[];
@@ -17,6 +19,19 @@ export const NexusConfig: React.FC<NexusConfigProps> = ({
   const [activeFloor, setActiveFloor] = useState('1');
   const [selectedNexusZona, setSelectedNexusZona] = useState('all');
   const [nexusSearchQuery, setNexusSearchQuery] = useState('');
+  
+  const { subscribeToPush, pushSubscription, sendNotification } = useNotifications();
+  const toast = useToast();
+
+  const handleTestNotification = () => {
+    sendNotification('[V-NEXUS] PRUEBA DE SISTEMA', {
+      body: 'Si ves esto, las notificaciones críticas están activas y configuradas correctamente.',
+      tag: 'nexus-test',
+      icon: '/pwa-512x512.png',
+      requireInteraction: true
+    });
+    toast.info('Enviando notificación de prueba...');
+  };
 
   // Heuristic floor detection
   const floors = Array.from(new Set(rooms.map(h => {
@@ -29,6 +44,15 @@ export const NexusConfig: React.FC<NexusConfigProps> = ({
       setActiveFloor(floors[0]);
     }
   }, [rooms]);
+
+  const handleSubscribe = async () => {
+    const sub = await subscribeToPush();
+    if (sub) {
+      toast.success('V-Push Activo: Notificaciones configuradas en este dispositivo 📱');
+    } else {
+      toast.error('Error al activar. Asegúrate de dar permisos de notificación.');
+    }
+  };
 
   const filteredRooms = rooms.filter(h => {
     const floorMatch = h.nombre.match(/^\d/);
@@ -55,6 +79,24 @@ export const NexusConfig: React.FC<NexusConfigProps> = ({
               </div>
             </div>
             <div className="flex gap-md">
+              <button 
+                onClick={handleTestNotification}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-white/5 border border-white/10 text-muted hover:text-white hover:bg-white/10 transition-all"
+              >
+                <RefreshCw size={14} />
+                Probar
+              </button>
+              <button 
+                onClick={handleSubscribe}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all
+                  ${pushSubscription 
+                    ? 'bg-success/20 text-success border border-success/30 cursor-default' 
+                    : 'bg-accent text-white shadow-lg shadow-accent/20 hover:scale-105 active:scale-95'}
+                `}
+              >
+                <Bell size={14} className={pushSubscription ? '' : 'animate-bounce'} />
+                {pushSubscription ? 'V-Push Activo' : 'Activar V-Push (Móvil)'}
+              </button>
               <div className="nexus-search relative">
                 <input 
                   type="text" 
@@ -72,6 +114,30 @@ export const NexusConfig: React.FC<NexusConfigProps> = ({
             </div>
           </div>
         </div>
+
+        {pushSubscription && (
+          <div className="p-4 bg-accent/5 border-b border-white/5 relative z-10 flex items-center justify-between animate-fade-in">
+            <div className="flex items-center gap-3">
+              <Share2 size={16} className="text-accent" />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-white uppercase tracking-tighter">Token de Dispositivo V-Push</span>
+                <span className="text-[9px] text-muted font-mono truncate max-w-[400px]">
+                  {JSON.stringify(pushSubscription)}
+                </span>
+              </div>
+            </div>
+            <button 
+              onClick={() => {
+                navigator.clipboard.writeText(JSON.stringify(pushSubscription));
+                toast.info('Token copiado al portapapeles');
+              }}
+              className="btn btn-ghost p-2"
+              title="Copiar Token"
+            >
+              <Copy size={14} />
+            </button>
+          </div>
+        )}
 
         <div className="floor-nav-bar p-md bg-black/20 relative z-10 flex items-center gap-md border-b border-white/5">
           <span className="text-[10px] font-black uppercase text-muted tracking-widest pl-md">Plantas:</span>

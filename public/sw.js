@@ -20,21 +20,29 @@ self.addEventListener('message', (event) => {
 // Manejar notificaciones push
 self.addEventListener('push', (event) => {
   let data = {};
-  try {
-    data = event.data ? event.data.json() : {};
-  } catch (e) {
-    data = { title: 'Alerta V-Suite', body: event.data.text() };
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = { title: 'V-Suite', body: event.data.text() };
+    }
   }
 
-  const title = data.title || 'Alerta V-Suite';
+  const title = data.title || 'V-Suite';
   const options = {
     body: data.body || 'Nueva actualización disponible.',
-    icon: '/pwa-192x192.png',
+    icon: '/pwa-512x512.png',
     badge: '/favicon.svg',
+    image: data.image || null,
     data: data.url || '/',
     tag: data.tag || 'vsuite-notification',
-    vibrate: [200, 100, 200],
-    requireInteraction: true
+    renotify: true, // Hacer que el móvil vibre de nuevo si llega otra con el mismo tag
+    vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40], // Patrón más agresivo
+    requireInteraction: true,
+    actions: [
+      { action: 'view', title: 'Ver detalle' },
+      { action: 'close', title: 'Ignorar' }
+    ]
   };
 
   event.waitUntil(self.registration.showNotification(title, options));

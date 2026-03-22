@@ -246,6 +246,39 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }
 
+  const [pushSubscription, setPushSubscription] = useState<PushSubscription | null>(null)
+
+  const subscribeToPush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.warn('Push not supported');
+      return null;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      
+      // Consultar si ya existe suscripción
+      let sub = await registration.pushManager.getSubscription();
+      
+      if (!sub) {
+        // Suscribirse (el usuario verá el prompt de permiso si no se ha dado)
+        // Nota: Requiere applicationServerKey (VAPID) para funcionar en producción
+        // Por ahora intentamos sin ella o con una dummy si el navegador lo permite
+        sub = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          // applicationServerKey: urlBase64ToUint8Array('TU_CLAVE_PUBLICA_AQUI')
+        });
+      }
+      
+      setPushSubscription(sub);
+      console.log('✅ Suscripción Push activa:', sub);
+      return sub;
+    } catch (err) {
+      console.error('Error suscribiendo a Push:', err);
+      return null;
+    }
+  }
+
   // Monitor de Alertas Críticas (2h sin atención)
   useEffect(() => {
     if (!profile || (profile.rol !== 'admin' && profile.rol !== 'super_admin')) return
@@ -292,6 +325,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       markAsRead,
       deleteNotification,
       clearAllNotifications,
+      subscribeToPush,
+      pushSubscription,
       permission 
     }}>
       {children}
