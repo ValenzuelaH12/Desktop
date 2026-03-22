@@ -1486,6 +1486,17 @@ input, textarea, select {
   }
 }
 
+/* Prevent double search on mobile */
+@media (max-width: 768px) {
+  .header .search-bar {
+    display: none !important;
+  }
+  
+  .incidencias-toolbar {
+    padding: var(--spacing-sm) !important;
+  }
+}
+
 /* Helper class for responsive tables */
 .overflow-x-auto {
   overflow-x: auto;

@@ -87,10 +87,10 @@ const DroppableColumn = ({ column, incidents, onDrop, onClickIncident }) => {
       <div className="flex items-center justify-between mb-4 p-2 relative">
         <div className={`absolute bottom-0 left-2 right-2 h-px bg-gradient-to-r from-${column.color} to-transparent opacity-30`} />
         <div className="flex items-center gap-2">
-          <column.icon size={16} className={`text-${column.color}`} />
-          <h3 className="font-black tracking-widest uppercase text-xs text-white">{column.label}</h3>
+          <column.icon size={16} className={`text-${column.color} flex-shrink-0`} />
+          <h3 className="font-black tracking-widest uppercase text-[10px] sm:text-xs text-white truncate">{column.label}</h3>
         </div>
-        <div className="bg-dark/50 border border-white/10 text-white min-w-[24px] h-6 flex items-center justify-center rounded-lg text-[10px] font-black shadow-md">
+        <div className="bg-dark/50 border border-white/10 text-white min-w-[20px] sm:min-w-[24px] h-5 sm:h-6 flex items-center justify-center rounded-lg text-[9px] sm:text-[10px] font-black shadow-md flex-shrink-0">
           {incidents.length}
         </div>
       </div>
