@@ -19,7 +19,8 @@ import {
   ShieldCheck,
   ClipboardCheck,
   CalendarDays,
-  Scan
+  Scan,
+  CreditCard
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
@@ -55,14 +56,15 @@ export default function Sidebar({ isOpen, closeSidebar }) {
     { id: 'lecturas', name: 'Lecturas', path: '/lecturas', icon: Activity },
     { id: 'chat', name: 'Chat', path: '/chat', icon: MessageSquare },
     { id: 'insights', name: 'V-Insights', path: '/insights', icon: BarChart3 },
-    { id: 'cadenas', name: 'Control de Cadena', path: '/superadmin', icon: Building2, hidden: availableHotels.length <= 1 && profile?.rol !== 'super_admin' },
+    { id: 'cadenas', name: 'Control de Cadena', path: '/superadmin', icon: Building2, hidden: availableHotels.length <= 1 && profile?.rol !== 'super_admin' && profile?.rol !== 'chain_manager' },
+    { id: 'billing', name: 'Suscripción', path: '/billing', icon: CreditCard, hidden: profile?.rol !== 'admin' && profile?.rol !== 'direccion' && profile?.rol !== 'super_admin' && profile?.rol !== 'chain_manager' },
     { id: 'configuracion', name: 'Configuración', path: '/configuracion', icon: Settings },
   ]
 
   // Filtro de items según permisos
   const filteredItems = navItems.filter(item => {
     if (item.hidden) return false;
-    if (profile?.rol === 'admin' || profile?.rol === 'direccion' || profile?.rol === 'super_admin') return true;
+    if (profile?.rol === 'admin' || profile?.rol === 'direccion' || profile?.rol === 'super_admin' || profile?.rol === 'chain_manager') return true;
     return profile?.permisos?.includes(item.id);
   });
 

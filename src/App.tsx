@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import Incidencias from './pages/Incidencias'
 import Chat from './pages/Chat'
 import Controles from './pages/Controles'
+import Billing from './pages/Billing'
 import Configuracion from './pages/Configuracion'
 import Lecturas from './pages/Lecturas'
 import Inventory from './pages/Inventory'
@@ -33,6 +34,29 @@ const ProtectedRoute = ({ children }) => {
   
   if (!user) {
     return <Navigate to="/login" />
+  }
+  
+  return children
+}
+
+// Bloqueo por suscripción
+const SubscriptionGuard = ({ children }) => {
+  const { activeHotel, loading, profile } = useAuth()
+  const location = useLocation()
+  
+  if (loading) return null
+  
+  // Evitar bucle si ya estamos en billing
+  if (location.pathname === '/billing') return children
+  
+  // Super Admins y Direccion siempre acceden (para evitar bloqueos totales accidentales)
+  if (profile?.rol === 'super_admin' || profile?.rol === 'direccion') return children
+  
+  const isActive = activeHotel?.subscription_status === 'active' || 
+                   activeHotel?.subscription_status === 'trialing'
+                   
+  if (!isActive) {
+    return <Navigate to="/billing" replace />
   }
   
   return children
@@ -83,13 +107,16 @@ function AppRoutes() {
       
       <Route path="/" element={
         <ProtectedRoute>
-          <Layout />
+          <SubscriptionGuard>
+            <Layout />
+          </SubscriptionGuard>
         </ProtectedRoute>
       }>
         <Route index element={<PermissionRoute moduleId="dashboard"><Dashboard /></PermissionRoute>} />
         <Route path="superadmin" element={<PermissionRoute moduleId="cadenas"><SuperAdmin /></PermissionRoute>} />
         <Route path="incidencias" element={<PermissionRoute moduleId="incidencias"><Incidencias /></PermissionRoute>} />
         <Route path="chat" element={<PermissionRoute moduleId="chat"><Chat /></PermissionRoute>} />
+        <Route path="billing" element={<Billing />} />
         <Route path="controles" element={<Controles />} />
         <Route path="configuracion" element={<PermissionRoute moduleId="configuracion"><Configuracion /></PermissionRoute>} />
         <Route path="lecturas" element={<PermissionRoute moduleId="lecturas"><Lecturas /></PermissionRoute>} />

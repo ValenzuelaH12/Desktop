@@ -41,6 +41,9 @@ export default function Chat() {
     description: ''
   })
   
+  const [typingUsers, setTypingUsers] = useState<string[]>([])
+  const typingTimeoutRef = useRef<any>(null)
+  
   const { unreadPerChannel, clearChannelUnread } = useNotifications()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -95,27 +98,65 @@ export default function Chat() {
     // Limpiar contador al entrar al canal
     clearChannelUnread(activeChannel)
 
+    // --- PRESENCIA Y TYPING ---
+    const presenceChannel = supabase.channel(`presence:${activeChannel}`)
+    
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState()
+        const typingIds = Object.values(state).flat()
+          .filter((p: any) => p.is_typing && p.user_id !== profile.id)
+          .map((p: any) => p.user_name)
+        setTypingUsers([...new Set(typingIds)])
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({ 
+            user_id: profile.id, 
+            user_name: profile.nombre, 
+            is_typing: false 
+          })
+        }
+      })
+
     const channel = supabase
-      .channel('chat_messages')
+      .channel(`chat_messages:${activeChannel}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'mensajes',
+        filter: `channel=eq.${activeChannel}`
       }, (payload) => {
-        const isMsgChange = payload.new?.channel === activeChannel || payload.old?.channel === activeChannel
-        if (isMsgChange) {
-          fetchMessages()
-          if (payload.eventType === 'INSERT') {
-            clearChannelUnread(activeChannel)
-          }
+        fetchMessages()
+        if (payload.eventType === 'INSERT') {
+          clearChannelUnread(activeChannel)
         }
       })
       .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
+      supabase.removeChannel(presenceChannel)
     }
-  }, [activeChannel, channels.length])
+  }, [activeChannel, channels.length, profile?.id])
+
+  const updateTypingStatus = async (isTyping: boolean) => {
+    const presenceChannel = supabase.channel(`presence:${activeChannel}`)
+    await presenceChannel.track({ 
+      user_id: profile.id, 
+      user_name: profile.nombre, 
+      is_typing: isTyping 
+    })
+  }
+
+  const handleTyping = () => {
+    updateTypingStatus(true)
+    
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+    typingTimeoutRef.current = setTimeout(() => {
+      updateTypingStatus(false)
+    }, 3000)
+  }
 
   const fetchMessages = async () => {
     try {
@@ -143,7 +184,8 @@ export default function Chat() {
           isMe: m.sender_id === profile?.id,
           read: m.read || hasBeenReadByOthers,
           mediaUrl: m.media_url,
-          mediaType: m.media_type
+          mediaType: m.media_type,
+          reactions: m.reactions || {}
         }
       })
 
@@ -301,36 +343,28 @@ export default function Chat() {
       const channelId = `dm_${[profile.id, targetUser.id].sort().join('_')}`
       const channelName = profile.nombre + ' & ' + targetUser.nombre
 
-      // Check if channel already exists
-      const { data: existingChannel, error: checkError } = await supabase
+      // 1. Asegurar que el canal existe (Upsert es más atómico y evita errores de duplicado)
+      const { error: canalError } = await supabase
         .from('canales')
-        .select('*')
-        .eq('id', channelId)
-        .maybeSingle()
+        .upsert({ 
+          id: channelId, 
+          nombre: channelName,
+          type: 'direct',
+          created_by: profile.id
+        }, { onConflict: 'id' })
 
-      if (!existingChannel) {
-        // Create new direct channel
-        const { error: insertCanalError } = await supabase
-          .from('canales')
-          .insert([{ 
-            id: channelId, 
-            nombre: channelName,
-            type: 'direct',
-            created_by: profile.id
-          }])
+      if (canalError) throw canalError
 
-        if (insertCanalError) throw insertCanalError
+      // 2. Asegurar que ambos usuarios son miembros
+      // Usamos upsert también aquí para evitar errores si uno ya era miembro
+      const { error: membersError } = await supabase
+        .from('canal_miembros')
+        .upsert([
+          { canal_id: channelId, user_id: profile.id },
+          { canal_id: channelId, user_id: targetUser.id }
+        ], { onConflict: 'canal_id, user_id' })
 
-        // Add both users as members
-        const { error: membersError } = await supabase
-          .from('canal_miembros')
-          .insert([
-            { canal_id: channelId, user_id: profile.id },
-            { canal_id: channelId, user_id: targetUser.id }
-          ])
-
-        if (membersError) throw membersError
-      }
+      if (membersError) throw membersError
 
       setShowNewChatModal(false)
       await fetchChannelsAndUsers()
@@ -447,6 +481,40 @@ export default function Chat() {
     }
   }
 
+  const handleReaction = async (messageId: number, emoji: string) => {
+    try {
+      const msg = messages.find(m => m.id === messageId);
+      if (!msg) return;
+
+      const currentReactions = { ...msg.reactions };
+      const userList = currentReactions[emoji] || [];
+      
+      let newUserList;
+      if (userList.includes(profile.id)) {
+        newUserList = userList.filter(id => id !== profile.id);
+      } else {
+        newUserList = [...userList, profile.id];
+      }
+
+      if (newUserList.length === 0) {
+        delete currentReactions[emoji];
+      } else {
+        currentReactions[emoji] = newUserList;
+      }
+
+      await supabase
+        .from('mensajes')
+        .update({ reactions: currentReactions })
+        .eq('id', messageId);
+
+      setMessages(prev => prev.map(m => 
+        m.id === messageId ? { ...m, reactions: currentReactions } : m
+      ));
+    } catch (error) {
+      console.error('Error with reaction:', error);
+    }
+  };
+
   return (
     <div className="chat-page">
       <div className="chat-layout glass-card">
@@ -528,9 +596,25 @@ export default function Chat() {
                   showAvatar={showAvatar}
                   onDelete={handleDeleteMessage}
                   onOpenMedia={(url) => window.open(url, '_blank')}
+                  onReaction={handleReaction}
                 />
               )
             })}
+            
+            {typingUsers.length > 0 && (
+              <div className="typing-indicator-wrapper animate-fade-in mb-sm">
+                <div className="flex items-center gap-sm bg-white/5 py-1 px-3 rounded-full border border-white/5">
+                  <div className="typing-dots">
+                    <span></span><span></span><span></span>
+                  </div>
+                  <span className="text-[10px] text-muted font-medium">
+                    {typingUsers.length === 1 
+                      ? `${typingUsers[0]} está escribiendo...` 
+                      : `${typingUsers.join(', ')} están escribiendo...`}
+                  </span>
+                </div>
+              </div>
+            )}
             {uploading && (
               <div className="message-wrapper is-me">
                 <div className="message-content">
@@ -557,6 +641,7 @@ export default function Chat() {
             onStopRecording={stopRecording}
             uploading={uploading}
             fileInputRef={fileInputRef}
+            onTyping={handleTyping}
           />
         </div>
       </div>
@@ -978,6 +1063,33 @@ export default function Chat() {
           .chat-input-area { padding: var(--spacing-sm); }
           .chat-header { padding: var(--spacing-sm) var(--spacing-md); }
           .active-chat-info h2 { font-size: var(--font-size-sm); }
+        }
+
+        .typing-indicator-wrapper {
+          align-self: flex-start;
+          margin-left: 48px;
+        }
+
+        .typing-dots {
+          display: flex;
+          gap: 3px;
+        }
+
+        .typing-dots span {
+          width: 4px;
+          height: 4px;
+          background: var(--color-accent);
+          border-radius: 50%;
+          animation: typingDot 1.4s infinite ease-in-out;
+        }
+
+        .typing-dots span:nth-child(1) { animation-delay: 0s; }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typingDot {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+          30% { transform: translateY(-4px); opacity: 1; }
         }
       `}</style>
     </div>

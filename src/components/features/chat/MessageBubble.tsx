@@ -5,14 +5,40 @@ export function MessageBubble({
   profile, 
   showAvatar, 
   onDelete, 
-  onOpenMedia 
+  onOpenMedia,
+  onReaction
 }: { 
   msg: any
   profile: any
   showAvatar: boolean
   onDelete: (id: number) => void
   onOpenMedia: (url: string) => void
+  onReaction: (messageId: number, emoji: string) => void
 }) {
+  const emojis = ['👍', '✅', '🔥', '😮']
+
+  const renderReactions = () => {
+    if (!msg.reactions || Object.keys(msg.reactions).length === 0) return null
+    return (
+      <div className="flex flex-wrap gap-xs mt-xs">
+        {Object.entries(msg.reactions).map(([emoji, users]: [string, any]) => (
+          <button
+            key={emoji}
+            onClick={() => onReaction(msg.id, emoji)}
+            className={`flex items-center gap-[2px] px-2 py-[2px] rounded-full text-[10px] border transition-all ${
+              users.includes(profile.id)
+                ? 'bg-accent/20 border-accent text-white'
+                : 'bg-white/5 border-white/10 text-muted hover:bg-white/10'
+            }`}
+          >
+            <span>{emoji}</span>
+            <span className="font-bold">{users.length}</span>
+          </button>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className={`message-wrapper ${msg.isMe ? 'is-me' : 'is-other'}`}>
       {!msg.isMe && showAvatar ? (
@@ -56,6 +82,8 @@ export function MessageBubble({
             </div>
           )}
           <p>{msg.text}</p>
+          {renderReactions()}
+          
           <div className="message-meta">
             <span className="message-time">{msg.time}</span>
             {msg.isMe && (
@@ -63,6 +91,18 @@ export function MessageBubble({
                 {msg.read ? <CheckCheck size={14} className="text-info" /> : <Check size={14} />}
               </span>
             )}
+          </div>
+
+          <div className={`absolute top-0 ${msg.isMe ? '-left-12' : '-right-12'} hidden group-hover:flex bg-white/10 backdrop-blur-md p-1 rounded-lg border border-white/10 gap-1 animate-scale-in z-50`}>
+            {emojis.map(e => (
+              <button 
+                key={e} 
+                onClick={() => onReaction(msg.id, e)}
+                className="hover:scale-125 transition-transform p-1 text-sm"
+              >
+                {e}
+              </button>
+            ))}
           </div>
         </div>
       </div>

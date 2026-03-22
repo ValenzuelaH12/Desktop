@@ -10,6 +10,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   activeHotelId: string | null;
+  activeHotel: Hotel | null;
   setActiveHotelId: (id: string | null) => void;
   availableHotels: Hotel[];
   refreshHotels: () => Promise<void>;
@@ -128,9 +129,11 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
+  const activeHotel = availableHotels.find(h => h.id === activeHotelId) || null;
+
     return (
       <AuthContext.Provider value={{ 
-        user, profile, loading, activeHotelId, setActiveHotelId, 
+        user, profile, loading, activeHotelId, activeHotel, setActiveHotelId, 
         availableHotels, refreshHotels, signIn, signOut 
       }}>
         {children}

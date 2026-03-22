@@ -12,7 +12,8 @@ export function ChatInput({
   onStartRecording,
   onStopRecording,
   uploading,
-  fileInputRef
+  fileInputRef,
+  onTyping
 }: {
   newMessage: string
   onNewMessageChange: (val: string) => void
@@ -25,6 +26,7 @@ export function ChatInput({
   onStopRecording: () => void
   uploading: boolean
   fileInputRef: React.RefObject<HTMLInputElement>
+  onTyping: () => void
 }) {
   return (
     <form onSubmit={onSend} className="chat-input-area border-t">
@@ -63,7 +65,10 @@ export function ChatInput({
         className="chat-input" 
         placeholder="Escribe un mensaje..." 
         value={newMessage}
-        onChange={(e) => onNewMessageChange(e.target.value)}
+        onChange={(e) => {
+          onNewMessageChange(e.target.value)
+          onTyping()
+        }}
         disabled={uploading}
       />
       

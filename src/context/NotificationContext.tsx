@@ -294,7 +294,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             subscription: sub,
             device_info: navigator.userAgent,
             updated_at: new Date().toISOString()
-          }, { onConflict: 'user_id, subscription' });
+          }, { onConflict: 'user_id' });
 
         if (error) console.error('Error guardando suscripción en DB:', error);
         else console.log('✅ Suscripción sincronizada con el servidor');

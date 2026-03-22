@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { 
   BarChart3, 
   Users, 
@@ -12,9 +12,13 @@ import {
   Search,
   Plus,
   X,
-  Globe
+  Globe,
+  CreditCard,
+  Check
 } from 'lucide-react'
 import { useSuperAdmin } from '../hooks/useSuperAdmin'
+import { usePlanes } from '../hooks/usePlanes'
+import { planService } from '../services/planService'
 import { configService } from '../services/configService'
 import { Line } from 'react-chartjs-2'
 import { 
@@ -30,17 +34,24 @@ import {
   BarElement
 } from 'chart.js'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler)
 
 export default function SuperAdmin() {
-  const { hotels, globalIncidents, globalStaff, isLoading } = useSuperAdmin()
+  const { hotels, globalIncidents, globalStaff, isLoading: adminLoading } = useSuperAdmin()
+  const { planes, isLoading: planesLoading, updatePlan } = usePlanes()
+  const { profile } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
+  const [isPlanesModalOpen, setIsPlanesModalOpen] = useState(false)
+  const [editingPlan, setEditingPlan] = useState<any | null>(null)
   const [newGlobalType, setNewGlobalType] = useState({ nombre: '', categoria: '' })
   const navigate = useNavigate()
+
+  // El efecto ya no es necesario ya que usePlanes maneja el fetch
 
   const metrics = useMemo(() => {
     const totalIncidents = globalIncidents.length
@@ -108,6 +119,26 @@ export default function SuperAdmin() {
     }
   }
 
+  const handleUpdatePlan = async () => {
+    if (!editingPlan) return
+    try {
+      await updatePlan({ id: editingPlan.id, updates: editingPlan })
+      setEditingPlan(null)
+      alert('Plan actualizado correctamente.')
+    } catch (error) {
+      console.error('Error updating plan:', error)
+      alert('Error al actualizar el plan: ' + (error as any).message)
+    }
+  }
+
+  const handleToggleFeature = (feature: string) => {
+    if (!editingPlan) return
+    const features = editingPlan.features.includes(feature)
+      ? editingPlan.features.filter(f => f !== feature)
+      : [...editingPlan.features, feature]
+    setEditingPlan({ ...editingPlan, features })
+  }
+
   const chartData = useMemo(() => {
     const labels = hotels.map(h => h.nombre)
     const activeData = hotels.map(hotel => 
@@ -126,7 +157,7 @@ export default function SuperAdmin() {
     }
   }, [hotels, globalIncidents])
 
-  if (isLoading) return <div className="p-xl text-center">Cargando visión global...</div>
+  if (adminLoading || planesLoading) return <div className="p-xl text-center">Cargando visión global...</div>
 
   return (
     <div className="p-lg md:p-xl space-y-xl animate-fade-in max-w-[1600px] mx-auto">
@@ -145,6 +176,14 @@ export default function SuperAdmin() {
             <Download size={16} />
             <span>Exportar Reporte</span>
           </button>
+          
+          {profile?.rol === 'super_admin' && (
+            <button className="v-button-secondary py-3 px-8 rounded-2xl flex items-center gap-sm font-black uppercase text-[10px] tracking-widest shadow-lg" onClick={() => setIsPlanesModalOpen(true)}>
+              <CreditCard size={16} />
+              <span>Gestión de Planes</span>
+            </button>
+          )}
+
           <button className="v-button-primary py-3 px-8 rounded-2xl flex items-center gap-sm font-black uppercase text-[10px] tracking-widest shadow-lg shadow-accent/20" onClick={() => setIsConfigModalOpen(true)}>
             <Plus size={16} />
             <span>Configuración Maestra</span>
@@ -302,6 +341,124 @@ export default function SuperAdmin() {
               <button className="btn btn-primary w-full" onClick={handleCreateGlobalType}>
                 Propagar a toda la cadena
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isPlanesModalOpen && profile?.rol === 'super_admin' && (
+        <div className="modal-overlay">
+          <div className="modal-content p-xl space-y-xl max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-black uppercase tracking-tight">Gestión de Planes V-Suite</h2>
+                <p className="text-muted text-xs font-bold uppercase tracking-widest">Configura tu oferta comercial</p>
+              </div>
+              <button className="btn-icon btn-ghost" onClick={() => setIsPlanesModalOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-xl">
+              {/* Lista de Planes */}
+              <div className="space-y-md">
+                <h3 className="text-sm font-bold uppercase text-muted tracking-widest">Planes Disponibles</h3>
+                <div className="space-y-sm">
+                  {planes.map(plan => (
+                    <button 
+                      key={plan.id}
+                      onClick={() => setEditingPlan(plan)}
+                      className={`w-full p-lg rounded-2xl border text-left transition-all flex justify-between items-center ${
+                        editingPlan?.id === plan.id ? 'border-accent bg-accent/5' : 'border-white/5 bg-white/5 hover:border-white/20'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-white">{plan.nombre}</div>
+                        <div className="text-xs text-muted">{plan.precio_mensual}€ / mes</div>
+                      </div>
+                      <ChevronRight size={16} className={editingPlan?.id === plan.id ? 'text-accent' : 'text-muted'} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Editor de Plan */}
+              <div className="v-glass-card p-lg border border-white/10">
+                {editingPlan ? (
+                  <div className="space-y-lg">
+                    <h3 className="text-sm font-bold uppercase text-accent tracking-widest">Editando: {editingPlan.nombre}</h3>
+                    
+                    <div className="grid grid-cols-2 gap-md">
+                      <div className="field-group">
+                        <label className="label text-[10px] uppercase text-muted font-bold">Precio Mensual (€)</label>
+                        <input 
+                          type="number" 
+                          className="input" 
+                          value={editingPlan.precio_mensual}
+                          onChange={(e) => setEditingPlan({ ...editingPlan, precio_mensual: Number(e.target.value) })}
+                        />
+                      </div>
+                      <div className="field-group">
+                        <label className="label text-[10px] uppercase text-muted font-bold">Precio Anual (€)</label>
+                        <input 
+                          type="number" 
+                          className="input" 
+                          value={editingPlan.precio_anual}
+                          onChange={(e) => setEditingPlan({ ...editingPlan, precio_anual: Number(e.target.value) })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="field-group">
+                      <label className="label text-[10px] uppercase text-muted font-bold">Descripción Corta</label>
+                      <input 
+                        type="text" 
+                        className="input" 
+                        value={editingPlan.descripcion}
+                        onChange={(e) => setEditingPlan({ ...editingPlan, descripcion: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-md">
+                      <label className="label text-[10px] uppercase text-muted font-bold">Características / Ventanas</label>
+                      <div className="grid grid-cols-1 gap-sm">
+                        {[
+                          'Habitaciones ilimitadas',
+                          'Analítica V-Insights',
+                          'V-Nexus Real-time',
+                          'V-Scan QR Premium',
+                          'Asistente V-AI (IA)',
+                          'Gestión de cadena (V-Chain)',
+                          'Soporte 24/7',
+                          'Panel de mantenimiento',
+                          'Notificaciones push'
+                        ].map(feature => (
+                          <button 
+                            key={feature}
+                            onClick={() => handleToggleFeature(feature)}
+                            className={`px-4 py-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-between ${
+                              editingPlan.features.includes(feature)
+                                ? 'border-success bg-success/10 text-success'
+                                : 'border-white/5 bg-white/5 text-muted hover:border-white/20'
+                            }`}
+                          >
+                            <span>{feature}</span>
+                            {editingPlan.features.includes(feature) && <Check size={14} />}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button className="v-button-primary w-full py-4 mt-lg rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-accent/20" onClick={handleUpdatePlan}>
+                      Guardar Cambios en {editingPlan.nombre}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-xl opacity-50">
+                    <CreditCard size={48} className="mb-md text-muted" />
+                    <p className="text-sm font-bold uppercase tracking-widest text-muted">Selecciona un plan para editar sus precios y beneficios</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

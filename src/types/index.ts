@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'admin' | 'direccion' | 'mantenimiento' | 'recepcion' | 'limpieza' | 'gobernanta';
+export type UserRole = 'super_admin' | 'admin' | 'direccion' | 'mantenimiento' | 'recepcion' | 'limpieza' | 'gobernanta' | 'chain_manager';
 
 export interface Hotel {
   id: string;
@@ -7,6 +7,10 @@ export interface Hotel {
   telefono?: string;
   email?: string;
   estado: 'activo' | 'inactivo';
+  plan?: 'trial' | 'basic' | 'pro' | 'enterprise';
+  subscription_status?: 'active' | 'past_due' | 'canceled' | 'trialing';
+  current_period_end?: string;
+  stripe_customer_id?: string;
   created_at: string;
 }
 
