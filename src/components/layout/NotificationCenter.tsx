@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Bell, Check, Trash2, ExternalLink, Calendar, MessageSquare, AlertTriangle, ShieldCheck } from 'lucide-react';
-import { useNotifications } from '../../../context/NotificationContext';
+import { useNotifications } from '../../context/NotificationContext';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
