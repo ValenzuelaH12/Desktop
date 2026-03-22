@@ -195,6 +195,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, [profile, permission])
 
+  const clearChannelUnread = (channelId: string) => {
+    setUnreadPerChannel(prev => ({
+      ...prev,
+      [channelId]: 0
+    }))
+    setChatNotifications(prev => prev.filter(n => !n.title.toLowerCase().includes(channelId.toLowerCase())))
+  }
+
+  const dismissNotification = (id: string) => {
+    setChatNotifications(prev => prev.filter(n => n.id !== id))
+  }
+
   const markAsRead = async (id?: string) => {
     if (!profile) return
     if (id) {
@@ -256,6 +268,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     <NotificationContext.Provider value={{ 
       unreadPerChannel, 
       totalUnread, 
+      chatNotifications,
+      clearChannelUnread,
+      dismissNotification,
       dbNotifications,
       loading,
       markAsRead,
