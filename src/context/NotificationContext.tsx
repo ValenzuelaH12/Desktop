@@ -148,9 +148,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         event: 'INSERT',
         schema: 'public',
         table: 'notificaciones',
-        filter: `user_id=eq.${profile.id}`
       }, (payload) => {
         const newNotif = payload.new
+        console.log('🔔 Recibida notificación de DB:', newNotif)
+
+        // Filtrar manualmente por user_id del perfil actual
+        if (newNotif.user_id !== profile.id) return
+
         setDbNotifications(prev => [newNotif, ...prev])
         
         // Disparar sonido y notificación nativa
@@ -160,7 +164,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         })
         toast.info(`${newNotif.title}: ${newNotif.message}`)
       })
-      .subscribe()
+      .subscribe((status) => {
+        console.log('📡 Estado suscripción notificaciones DB:', status)
+      })
 
     // Cargar notificaciones iniciales
     const fetchDbNotifications = async () => {
