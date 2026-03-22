@@ -20,12 +20,26 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  // Manejo de CORS (Preflight)
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { 
+      status: 200, 
+      headers: corsHeaders 
+    })
   }
 
   try {
-    const { hotelId, plan, cycle } = await req.json()
+    const { hotelId, plan: planIncoming, cycle: cycleIncoming } = await req.json()
+
+    // Manejar tanto formato separado como combinado (p.ej. starter_monthly)
+    let finalPlan = planIncoming
+    let finalCycle = cycleIncoming
+
+    if (planIncoming && planIncoming.includes('_') && !cycleIncoming) {
+      const parts = planIncoming.split('_')
+      finalPlan = parts[0]
+      finalCycle = parts[1]
+    }
 
     // 1. Obtener info del hotel
     const { data: hotel, error: hotelError } = await supabase
@@ -36,19 +50,18 @@ serve(async (req) => {
 
     if (hotelError) throw hotelError
 
-    // 2. Mapear plan a Price ID de Stripe (Idealmente esto vendría de configuracion_planes)
-    // El usuario deberá reemplazar estos IDs con los reales de su dashboard
+    // 2. Mapear plan a Price ID de Stripe
     const priceMap: Record<string, string> = {
       'starter_monthly': 'price_1TDpAtKHOMjetV18uXxwnNsd',
-      'starter_yearly': 'price_1TDpAtKHOMjetV18uXxwnNsd', // Temporal: el usuario no ha creado anuales
+      'starter_yearly': 'price_1TDpAtKHOMjetV18uXxwnNsd',
       'pro_monthly': 'price_1TDpBsKHOMjetV18aiL78eRx',
       'pro_yearly': 'price_1TDpBsKHOMjetV18aiL78eRx',
       'enterprise_monthly': 'price_1TDpCsKHOMjetV18iwnNsdeUD',
       'enterprise_yearly': 'price_1TDpCsKHOMjetV18iwnNsdeUD',
     }
 
-    const priceId = priceMap[`${plan}_${cycle}`]
-    if (!priceId) throw new Error('Plan no válido')
+    const priceId = priceMap[`${finalPlan}_${finalCycle}`]
+    if (!priceId) throw new Error(`Plan o Ciclo no válido: ${finalPlan}_${finalCycle}`)
 
     // 3. Crear sesión de checkout
     const session = await stripe.checkout.sessions.create({
@@ -64,7 +77,7 @@ serve(async (req) => {
       cancel_url: `${req.headers.get('origin')}/billing?canceled=true`,
       metadata: {
         hotelId,
-        plan,
+        plan: finalPlan,
       },
     })
 
@@ -73,8 +86,9 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {
+    const err = error as Error;
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: err.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     )
   }
