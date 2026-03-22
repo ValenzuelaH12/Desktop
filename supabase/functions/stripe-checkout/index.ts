@@ -51,12 +51,12 @@ serve(async (req) => {
     if (hotelError) throw hotelError
 
     // 2. Mapear plan a Price ID de Stripe
-    const priceMap: Record<string, string> = {
+    const piceMap: Record<string, string> = {
       'starter_monthly': 'price_1TDpAtKHOMjetV18uXxwnNsd',
       'starter_yearly': 'price_1TDpAtKHOMjetV18uXxwnNsd',
       'pro_monthly': 'price_1TDpBsKHOMjetV18aiL78eRx',
       'pro_yearly': 'price_1TDpBsKHOMjetV18aiL78eRx',
-      'enterprise_monthly': 'price_1TDpCsKHOMjetV18iwnNsdeUD',
+      'enterprise_monthly': 'price_1TDpCsKHOMjetV18iwnNsdeUDprice_1TDpCsKHOMjetV18ivHLmeUD
       'enterprise_yearly': 'price_1TDpCsKHOMjetV18iwnNsdeUD',
     }
 
