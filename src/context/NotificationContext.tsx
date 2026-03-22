@@ -218,18 +218,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }
 
-  const clearChannelUnread = (channelId: string) => {
-    setUnreadPerChannel(prev => ({
-      ...prev,
-      [channelId]: 0
-    }))
-    setChatNotifications(prev => prev.filter(n => !n.title.toLowerCase().includes(channelId.toLowerCase())))
-  }
-
-  const dismissNotification = (id: string) => {
-    setChatNotifications(prev => prev.filter(n => n.id !== id))
-  }
-
   // Monitor de Alertas Críticas (2h sin atención)
   useEffect(() => {
     if (!profile || (profile.rol !== 'admin' && profile.rol !== 'super_admin')) return
