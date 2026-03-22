@@ -16,13 +16,7 @@ webpush.setVapidDetails(
 );
 
 // 2. Aquí va el objeto de suscripción que copiaste de la App (V-Push Token)
-const pushSubscription = {
-  endpoint: 'TU_ENDPOINT_AQUI',
-  keys: {
-    auth: 'TU_AUTH_KEY_AQUI',
-    p256dh: 'TU_P256DH_KEY_AQUI'
-  }
-};
+const pushSubscription = {"endpoint":"https://fcm.googleapis.com/fcm/send/dwixpMnGGKo:APA91bHRAEoL5B0d-EZ2_YaYzi4xgWHrsHySQOb-JV-Bhyr0uEUsubW5cPwgZeuid22hZiNLBPEXF63fwPW3i35hySc5Ni3LSFOTua14A4e4IhyGKoV_N2A-Ljzd7CKIRUe-1wBQO_ic","expirationTime":null,"keys":{"p256dh":"BKoBG8wePQPns8dq-2j2VHgzYukKHa7B5gIMksliU37ZhDWdKyc8H4RRzaXKd8E1nGv_OM6v96leUv5kzfmq0OU","auth":"x9DThVtHf1EIU4vpwuON9A"}};
 
 // 3. Contenido de la notificación
 const payload = JSON.stringify({
