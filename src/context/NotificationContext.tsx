@@ -327,6 +327,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       clearAllNotifications,
       subscribeToPush,
       pushSubscription,
+      sendNotification,
       permission 
     }}>
       {children}
