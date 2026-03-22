@@ -34,12 +34,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [permission])
 
   const sendNotification = async (title: string, options?: NotificationOptions) => {
-    // Sonido siempre
-    notificationSound.current.play().catch(() => {})
+    // Sonido premium directo
+    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3')
+    audio.play().catch(e => console.warn('Audio play blocked:', e))
 
-    if (permission !== 'granted') return
-
-    try {
+    console.log('📢 Disparando sendNotification:', title, options)
+    
+    if (permission !== 'granted') {
+      console.warn('⚠️ Permiso de notificación no concedido:', permission)
+      return
+    }
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         const registration = await navigator.serviceWorker.ready
         if (registration) {
