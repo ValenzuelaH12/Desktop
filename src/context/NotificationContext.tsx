@@ -155,24 +155,24 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const dbNotifChannel = supabase
       .channel('db_notifications')
       .on('postgres_changes', {
-        event: 'INSERT',
+        event: '*', // Escuchar todo: INSERT, UPDATE, DELETE
         schema: 'public',
         table: 'notificaciones',
       }, (payload) => {
-        const newNotif = payload.new
-        console.log('🔔 Recibida notificación de DB:', newNotif)
-
-        // Filtrar manualmente por user_id del perfil actual
-        if (newNotif.user_id !== profile.id) return
-
-        setDbNotifications(prev => [newNotif, ...prev])
-        
-        // Disparar sonido y notificación nativa
-        sendNotification(newNotif.title, {
-          body: newNotif.message,
-          data: newNotif.link
-        })
-        toast.info(`${newNotif.title}: ${newNotif.message}`)
+        if (payload.eventType === 'INSERT') {
+          const newNotif = payload.new
+          console.log('🔔 Recibida notificación de DB:', newNotif)
+          if (newNotif.user_id !== profile.id) return
+          setDbNotifications(prev => [newNotif, ...prev])
+          sendNotification(newNotif.title, { body: newNotif.message, data: newNotif.link })
+          toast.info(`${newNotif.title}: ${newNotif.message}`)
+        } 
+        else if (payload.eventType === 'UPDATE') {
+          setDbNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new : n))
+        }
+        else if (payload.eventType === 'DELETE') {
+          setDbNotifications(prev => prev.filter(n => n.id !== payload.old.id))
+        }
       })
       .subscribe((status) => {
         console.log('📡 Estado suscripción notificaciones DB:', status)
@@ -212,12 +212,37 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const markAsRead = async (id?: string) => {
     if (!profile) return
-    if (id) {
-      await supabase.from('notificaciones').update({ read: true }).eq('id', id)
-      setDbNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
-    } else {
-      await supabase.from('notificaciones').update({ read: true }).eq('user_id', profile.id)
-      setDbNotifications(prev => prev.map(n => ({ ...n, read: true })))
+    try {
+      if (id) {
+        setDbNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+        await supabase.from('notificaciones').update({ read: true }).eq('id', id)
+      } else {
+        setDbNotifications(prev => prev.map(n => ({ ...n, read: true })))
+        await supabase.from('notificaciones').update({ read: true }).eq('user_id', profile.id)
+      }
+    } catch (err) {
+      console.error('Error marking as read:', err)
+    }
+  }
+
+  const deleteNotification = async (id: string) => {
+    if (!profile) return
+    try {
+      setDbNotifications(prev => prev.filter(n => n.id !== id))
+      await supabase.from('notificaciones').delete().eq('id', id)
+    } catch (err) {
+      console.error('Error deleting notification:', err)
+    }
+  }
+
+  const clearAllNotifications = async () => {
+    if (!profile) return
+    try {
+      setDbNotifications([])
+      await supabase.from('notificaciones').delete().eq('user_id', profile.id)
+      toast.success('Notificaciones limpiadas')
+    } catch (err) {
+      console.error('Error clearing notifications:', err)
     }
   }
 
@@ -265,6 +290,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       dbNotifications,
       loading,
       markAsRead,
+      deleteNotification,
+      clearAllNotifications,
       permission 
     }}>
       {children}
