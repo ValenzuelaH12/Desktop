@@ -270,32 +270,52 @@ export default function Configuracion() {
             margin-top: var(--spacing-sm);
           }
           .config-sidebar {
-            position: sticky;
-            top: var(--header-height);
+            position: relative;
+            top: 0;
             z-index: 10;
-            margin-bottom: var(--spacing-md);
-            padding: 0.5rem !important;
+            margin-bottom: var(--spacing-lg);
+            padding: var(--spacing-md) !important;
+            background: rgba(255, 255, 255, 0.02) !important;
           }
           .config-sidebar nav {
             flex-direction: row !important;
-            overflow-x: auto;
-            padding: 0.25rem 0;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
+            flex-wrap: wrap !important;
             gap: var(--spacing-xs);
-          }
-          .config-sidebar nav::-webkit-scrollbar {
-            display: none;
+            justify-content: center;
           }
           .config-nav-btn {
             white-space: nowrap;
-            padding: 0.625rem 1rem;
+            padding: 0.75rem 1rem;
             flex-shrink: 0;
-            width: auto !important;
+            width: calc(50% - var(--spacing-xs)) !important; /* Cuadrícula de 2 columnas en móvil */
             font-size: 0.8rem;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
           }
           .config-nav-btn span {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+          }
+          .config-nav-btn.active {
+             background: var(--color-accent) !important;
+             border-color: var(--color-accent) !important;
+             color: white !important;
+          }
+          .config-nav-btn.active .text-accent,
+          .config-nav-btn.active .text-muted {
+            color: white !important;
+          }
+          /* Ocultar el punto indicador en móvil para ganar espacio */
+          .config-nav-btn div.ml-auto {
+            display: none;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .config-nav-btn {
+            width: 100% !important; /* En móviles muy pequeños, 1 columna total hacia abajo */
+            justify-content: flex-start;
           }
         }
       `}</style>
